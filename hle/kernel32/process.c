@@ -8,6 +8,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -715,17 +716,200 @@ static void k_UnhandledExceptionFilter(rc_cpu *c)
     RC_RETURN(c, 1, 1); /* EXCEPTION_EXECUTE_HANDLER: the process ends */
 }
 
-static void k_RaiseException(rc_cpu *c)
+/* ---- structured exceptions ----
+ *
+ * Win32 SEH on the guest's own registration records (fs:[0], a chain on the stack): the
+ * handlers are the program's own lifted code (MSVC's __CxxFrameHandler for C++ exceptions,
+ * __except_handler3 for __try). When a handler continues in an outer frame (it jumps there with
+ * the stack cut back), the runtime unwinds the lifted functions to that frame (rc_dispatch_jump,
+ * rc_unwind_claim in rc/lifted.h). */
+
+#define EXCEPTION_NONCONTINUABLE 0x1u
+#define EXCEPTION_UNWINDING 0x2u
+#define EXCEPTION_EXIT_UNWIND 0x4u
+#define CHAIN_END 0xffffffffu
+#define EXCEPTION_RECORD_SIZE 0x50u
+#define CONTEXT_SIZE 0x2ccu
+
+/* EXCEPTION_RECORD and CONTEXT at `rec` and `ctx` for an exception raised by the caller of the
+ * current import (registers as they will be after it returns, `args` bytes of arguments). */
+static void fill_exception(rc_cpu *c, uint32_t rec, uint32_t ctx, uint32_t code, uint32_t flags, uint32_t n,
+                           uint32_t info, uint32_t args)
 {
-    rc_fatal("RaiseException(%#x, flags %#x) from %#010x: structured exceptions are not "
-             "modelled yet",
-             RC_ARG(c, 0), RC_ARG(c, 1), rc_ld32(c->r[RC_ESP]));
+    uint32_t ret = rc_ld32(c->r[RC_ESP]);
+    for (uint32_t i = 0; i < EXCEPTION_RECORD_SIZE; i += 4) {
+        rc_st32(rec + i, 0);
+    }
+    rc_st32(rec + 0, code);
+    rc_st32(rec + 4, flags);
+    rc_st32(rec + 12, ret);
+    n = n > 15 ? 15 : n;
+    rc_st32(rec + 16, n);
+    for (uint32_t i = 0; i < n; i++) {
+        rc_st32(rec + 20 + 4 * i, info ? rc_ld32(info + 4 * i) : 0);
+    }
+    for (uint32_t i = 0; i < CONTEXT_SIZE; i += 4) {
+        rc_st32(ctx + i, 0);
+    }
+    rc_st32(ctx + 0x00, 0x1003fu); /* CONTEXT_FULL and the debug, float and extended registers */
+    rc_st32(ctx + 0x9c, c->r[RC_EDI]);
+    rc_st32(ctx + 0xa0, c->r[RC_ESI]);
+    rc_st32(ctx + 0xa4, c->r[RC_EBX]);
+    rc_st32(ctx + 0xa8, c->r[RC_EDX]);
+    rc_st32(ctx + 0xac, c->r[RC_ECX]);
+    rc_st32(ctx + 0xb0, c->r[RC_EAX]);
+    rc_st32(ctx + 0xb4, c->r[RC_EBP]);
+    rc_st32(ctx + 0xb8, ret);
+    rc_st32(ctx + 0xbc, 0x1b);
+    rc_st32(ctx + 0xc0, rc_eflags(c));
+    rc_st32(ctx + 0xc4, c->r[RC_ESP] + 4 + args);
+    rc_st32(ctx + 0xc8, 0x23);
 }
 
+#define EXCEPTION_NESTED_CALL 0x10u
+#define DISPOSITION_NESTED 2
+
+/* The handler of the dispatcher's own registration record (below): an exception raised while a
+ * handler runs (in a catch block) reaches it as nested; it names the frame whose handler was
+ * running. Unwinding passes it by. */
+static void k_rc_NestedExceptionHandler(rc_cpu *c)
+{
+    uint32_t rec = RC_ARG(c, 0), frame = RC_ARG(c, 1), dc = RC_ARG(c, 3);
+    if (rc_ld32(rec + 4) & (EXCEPTION_UNWINDING | EXCEPTION_EXIT_UNWIND)) {
+        RC_RETURN(c, 1, 0); /* ExceptionContinueSearch (cdecl) */
+    }
+    rc_st32(dc, rc_ld32(frame + 8));
+    RC_RETURN(c, DISPOSITION_NESTED, 0);
+}
+
+/* Call an exception handler (cdecl: handler(record, frame, context, dispatcher context)) with
+ * the stack below `low`; its result, or -1 when the exception continues elsewhere (unwinding).
+ * As Windows does, a registration record of the dispatcher's own is on top of the chain while
+ * the handler runs (next, handler, the frame being handled): MSVC's __CxxFrameHandler relinks
+ * it above the catching frame after RtlUnwind, and nested exceptions find it. */
+static int call_handler(rc_cpu *c, uint32_t handler, uint32_t low, uint32_t rec, uint32_t frame, uint32_t ctx,
+                        uint32_t dc)
+{
+    uint32_t mine = low;
+    rc_st32(mine, rc_ld32(c->fs_base));
+    rc_st32(mine + 4, rc_import_address(K32, "rc_NestedExceptionHandler"));
+    rc_st32(mine + 8, frame);
+    rc_st32(c->fs_base, mine);
+    c->r[RC_ESP] = mine - 16;
+    rc_st32(dc, 0);
+    uint32_t a[4] = {rec, frame, ctx, dc};
+    uint32_t r = rc_call_guest(c, handler, 4, a);
+    if (c->unwind) {
+        return -1;
+    }
+    rc_st32(c->fs_base, rc_ld32(mine)); /* what the record links to now */
+    return (int)r;
+}
+
+/* The C++ type of a thrown MSVC exception (0xe06d7363), for the message when nothing catches it. */
+static const char *thrown_type(uint32_t rec)
+{
+    if (rc_ld32(rec) != 0xe06d7363u || rc_ld32(rec + 16) < 3) {
+        return "";
+    }
+    uint32_t info = rc_ld32(rec + 28); /* ThrowInfo */
+    uint32_t types = info ? rc_ld32(info + 12) : 0;
+    uint32_t first = types && rc_ld32(types) ? rc_ld32(types + 4) : 0; /* CatchableType */
+    uint32_t td = first ? rc_ld32(first + 4) : 0;
+    return td ? rc_str(td + 8) : "";
+}
+
+/* RaiseException(code, flags, count, arguments): the handlers of the chain from fs:[0] are asked
+ * in turn; one may continue in its own frame further up (the usual end of a C++ throw), or
+ * resume after the call (ExceptionContinueExecution). */
+static void k_RaiseException(rc_cpu *c)
+{
+    uint32_t code = RC_ARG(c, 0), flags = RC_ARG(c, 1) & EXCEPTION_NONCONTINUABLE;
+    uint32_t n = RC_ARG(c, 2), info = RC_ARG(c, 3);
+    uint32_t entry = c->r[RC_ESP];
+    uint32_t ctx = (entry - 0x40 - CONTEXT_SIZE) & ~0xfu;
+    uint32_t rec = ctx - EXCEPTION_RECORD_SIZE;
+    uint32_t dc = rec - 16;
+    uint32_t low = dc - 64;
+    fill_exception(c, rec, ctx, code, flags, n, info, 16);
+    uint32_t saved_eh_esp = c->eh_esp;
+    uint32_t nested = 0; /* a frame whose handler raised this exception, when nested */
+    c->eh_depth++;
+    c->eh_esp = entry;
+    if (getenv("RC_TRACE_SEH")) {
+        rc_log("seh: raise %#x %s at %#010x esp %#x depth %u", code, thrown_type(rec), rc_ld32(entry), entry, c->eh_depth);
+        for (uint32_t f = rc_ld32(c->fs_base), i = 0; f != CHAIN_END && f && i < 20; f = rc_ld32(f), i++) {
+            rc_log("seh:   frame %#x handler %#010x [+8] %#x [+c] %#x", f, rc_ld32(f + 4), rc_ld32(f + 8), rc_ld32(f + 12));
+        }
+    }
+    for (uint32_t frame = rc_ld32(c->fs_base); frame != CHAIN_END && frame;) {
+        int r = call_handler(c, rc_ld32(frame + 4), low, rec, frame, ctx, dc);
+        if (getenv("RC_TRACE_SEH")) {
+            rc_log("seh: frame %#x -> %d (unwind %u to %#010x ebp %#x)", frame, r, c->unwind, c->unwind_eip, c->unwind_ebp);
+        }
+        if (r < 0) {
+            c->eh_depth--;
+            c->eh_esp = saved_eh_esp;
+            return; /* continues in an outer frame */
+        }
+        if (r == 0) { /* ExceptionContinueExecution */
+            c->eh_depth--;
+            c->eh_esp = saved_eh_esp;
+            if (flags & EXCEPTION_NONCONTINUABLE) {
+                rc_fatal("RaiseException(%#x): a handler continued a noncontinuable exception", code);
+            }
+            c->r[RC_ESP] = entry;
+            RC_RETURN(c, 0, 4);
+        }
+        if (frame == nested) {
+            rc_st32(rec + 4, rc_ld32(rec + 4) & ~EXCEPTION_NESTED_CALL);
+            nested = 0;
+        }
+        if (r == DISPOSITION_NESTED) {
+            rc_st32(rec + 4, rc_ld32(rec + 4) | EXCEPTION_NESTED_CALL);
+            if (rc_ld32(dc) > nested) {
+                nested = rc_ld32(dc);
+            }
+        }
+        frame = rc_ld32(frame); /* ExceptionContinueSearch, or nested: the next record */
+    }
+    rc_fatal("unhandled exception %#x %s raised from %#010x", code, thrown_type(rec), rc_ld32(entry));
+}
+
+/* RtlUnwind(target frame, target ip, record, return value): every handler of the chain above
+ * the target frame is called once more to unwind (destructors, __finally), and its record taken
+ * off the chain; then the call returns (to the target ip, which is the return address). */
 static void k_RtlUnwind(rc_cpu *c)
 {
-    rc_fatal("RtlUnwind from %#010x: structured exceptions are not modelled yet",
-             rc_ld32(c->r[RC_ESP]));
+    uint32_t target = RC_ARG(c, 0), given = RC_ARG(c, 2), value = RC_ARG(c, 3);
+    uint32_t entry = c->r[RC_ESP];
+    uint32_t ctx = (entry - 0x40 - CONTEXT_SIZE) & ~0xfu;
+    uint32_t rec = ctx - EXCEPTION_RECORD_SIZE;
+    uint32_t dc = rec - 16;
+    uint32_t low = dc - 64;
+    fill_exception(c, rec, ctx, 0xc0000027u /* STATUS_UNWIND */, 0, 0, 0, 16);
+    if (given) {
+        for (uint32_t i = 0; i < EXCEPTION_RECORD_SIZE; i += 4) {
+            rc_st32(rec + i, rc_ld32(given + i));
+        }
+    }
+    rc_st32(rec + 4, rc_ld32(rec + 4) | EXCEPTION_UNWINDING | (target ? 0 : EXCEPTION_EXIT_UNWIND));
+    if (getenv("RC_TRACE_SEH")) {
+        rc_log("seh: unwind to frame %#x", target);
+    }
+    for (uint32_t frame = rc_ld32(c->fs_base); frame != CHAIN_END && frame && frame != target;) {
+        int r = call_handler(c, rc_ld32(frame + 4), low, rec, frame, ctx, dc);
+        if (r < 0) {
+            return;
+        }
+        frame = rc_ld32(frame);
+        rc_st32(c->fs_base, frame);
+    }
+    if (given) {
+        rc_st32(given + 4, rc_ld32(rec + 4));
+    }
+    c->r[RC_ESP] = entry;
+    RC_RETURN(c, value, 4);
 }
 
 const rc_import_def rc_k32_process[] = {
@@ -799,5 +983,6 @@ const rc_import_def rc_k32_process[] = {
     {K32, "UnhandledExceptionFilter", k_UnhandledExceptionFilter},
     {K32, "RaiseException", k_RaiseException},
     {K32, "RtlUnwind", k_RtlUnwind},
+    {K32, "rc_NestedExceptionHandler", k_rc_NestedExceptionHandler},
 };
 const uint32_t rc_k32_process_count = sizeof rc_k32_process / sizeof rc_k32_process[0];
