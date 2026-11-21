@@ -129,7 +129,7 @@ static bool file_path(char *out)
 }
 
 /* One registry file. `install`: the installer's entries, whose strings may hold `{app}`, the
- * installation directory as the program sees it. */
+ * installation directory as the program sees it, and `{drive:{app}}`, its drive. */
 static void load_file(const char *path, bool install)
 {
     /* Read whole through rc_host_read: in a browser the game's files are read only that way. */
@@ -185,6 +185,13 @@ static void load_file(const char *path, bool install)
                     o += (size_t)snprintf(out + o, sizeof out - o, "%s", rc_cfg->guest_dir);
                     o = o < sizeof out ? o : sizeof out - 1;
                     p += 5;
+                } else if (!strncmp(p, "{drive:{app}}", 13)) {
+                    /* the installation directory's drive, "C:" */
+                    const char *g = rc_cfg->guest_dir;
+                    size_t dn = g[0] && g[1] == ':' ? 2 : 0;
+                    o += (size_t)snprintf(out + o, sizeof out - o, "%.*s", (int)dn, g);
+                    o = o < sizeof out ? o : sizeof out - 1;
+                    p += 13;
                 } else {
                     out[o++] = *p++;
                 }
