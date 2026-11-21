@@ -408,3 +408,39 @@ fn dead_tail_after_a_call_that_does_not_return() {
         .iter()
         .any(|d| d[0].0 == 0x40_1006 && d[1].0 == 0x40_1007));
 }
+
+#[test]
+fn a_failed_gap_guess_does_not_block_a_pointer() {
+    // Fill after the entry's ret decodes across the start of a function that only .rdata points
+    // to (a CRT initialiser): the pointer wins and the fill is padding.
+    let c = code(
+        0x20,
+        &[
+            (0x40_1000, &[0x33, 0xc0, 0xc3]),       // xor eax, eax; ret
+            (0x40_1003, &[0x8b, 0x44, 0x24, 0x04]), // leftover bytes ...
+            (0x40_1007, &[0xff, 0x15, 0x04, 0x20, 0x40, 0x00]),
+            (0x40_100d, &[0x00, 0x83, 0xc4]), // ... running into the next function
+            (0x40_1010, &[0x33, 0xc0, 0xc3]), // only referenced from .rdata
+        ],
+    );
+    let mut rdata = vec![0u8; 0x20];
+    rdata[0x10..0x14].copy_from_slice(&le(0x40_1010));
+    let img = image(&c, &rdata);
+    let opts = Options::default();
+    let (joins, deny) = (BTreeSet::new(), std::collections::HashSet::new());
+    let mut e = crate::engine::Engine::new(&img, &opts, Default::default(), &joins, &deny);
+    e.run_all();
+    assert!(
+        !e.blocking_pointers().contains(&0x40_1010),
+        "the gap guess's failure counted against the pointer"
+    );
+    let m = discover(&img, &opts, "t.exe", "00");
+    let f = m
+        .functions
+        .iter()
+        .find(|f| f.entry.0 == 0x40_1010)
+        .expect("pointer function");
+    assert!(f.sources.contains(&"data_pointer".to_string()));
+    assert!(m.functions.iter().all(|f| f.entry.0 != 0x40_1003));
+    assert!(m.unknown.is_empty(), "unknown: {:?}", m.unknown);
+}

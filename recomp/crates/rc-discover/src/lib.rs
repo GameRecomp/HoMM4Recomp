@@ -42,19 +42,54 @@ use std::collections::{BTreeSet, HashSet};
 /// A pointer into the middle of real code can decode as a plausible function before the code
 /// around it is found, and then blocks that code. When the first pass shows such pointers
 /// (functions found only through a pointer whose bytes made other candidates fail), a second
-/// pass leaves them out; its result is kept only if it classifies more of the code sections.
+/// pass leaves them out, and so on while a pass reveals more of them; a pass's result is kept only
+/// if it leaves fewer bytes unsettled (unknown, or pointed to but not code).
 pub fn discover(img: &Image, opts: &Options, name: &str, sha256: &str) -> CodeMap {
-    let (map, suspects) = discover_with(img, opts, name, sha256, &HashSet::new());
-    if suspects.is_empty() {
-        return map;
+    // Unclassified bytes, and bytes a pointer leads to that failed to decode as code (data_ref):
+    // code that a false pointer's bogus function blocked often ends up as the latter.
+    let unsettled = |m: &CodeMap| {
+        let unknown: u64 = m.coverage.iter().map(|c| u64::from(c.unknown)).sum();
+        let data_ref: u64 = m
+            .data
+            .iter()
+            .filter(|d| d.kind == "data_ref")
+            .map(|d| u64::from(d.end.0 - d.start.0))
+            .sum();
+        unknown + data_ref
+    };
+    let mut deny = HashSet::new();
+    let (mut best, mut suspects) = discover_with(img, opts, name, sha256, &deny);
+    // Each pass leaves out the pointers the passes before showed to block real code; a pass can
+    // reveal more of them (the code it finds fails against another false pointer's function),
+    // and may look worse until those are gone too. The best pass is kept.
+    for _ in 0..6 {
+        if suspects.is_subset(&deny) {
+            break;
+        }
+        deny.extend(suspects);
+        let (next, more) = discover_with(img, opts, name, sha256, &deny);
+        if unsettled(&next) < unsettled(&best) {
+            best = next;
+        }
+        suspects = more;
     }
-    let (second, _) = discover_with(img, opts, name, sha256, &suspects);
-    let unknown = |m: &CodeMap| m.coverage.iter().map(|c| u64::from(c.unknown)).sum::<u64>();
-    if unknown(&second) < unknown(&map) {
-        second
-    } else {
-        map
+    // A pointer can also be blamed by mistake, when false pointers into the middle of its own
+    // code failed against it (Heroes IV: CRT initialisers). Denied pointers whose targets ended
+    // up as data_ref bytes get one more pass with them allowed.
+    let rescue: HashSet<u32> = best
+        .data
+        .iter()
+        .filter(|d| d.kind == "data_ref" && deny.contains(&d.start.0))
+        .map(|d| d.start.0)
+        .collect();
+    if !rescue.is_empty() {
+        let allowed: HashSet<u32> = deny.difference(&rescue).copied().collect();
+        let (next, _) = discover_with(img, opts, name, sha256, &allowed);
+        if unsettled(&next) < unsettled(&best) {
+            best = next;
+        }
     }
+    best
 }
 
 /// Rounds repeat until neither the no-return set nor the cross-jump entries change: a

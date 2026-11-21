@@ -1337,8 +1337,14 @@ impl<'a> Engine<'a> {
     pub fn blocking_pointers(&self) -> HashSet<u32> {
         let weak = Source::DataPointer.bit() | Source::CodePointer.bit();
         let mut out = HashSet::new();
-        for (_, _, why) in &self.rejected {
+        for (_, src, why) in &self.rejected {
             if !(why.contains("overlaps known bytes") || why.contains("enters an instruction")) {
+                continue;
+            }
+            // A gap candidate is a guess at unreferenced code; that it fails against a pointer's
+            // code is no evidence against the pointer (Heroes IV: alignment fill decoded across
+            // the start of a CRT initialiser that only its table points to).
+            if *src == Source::Gap {
                 continue;
             }
             let Some(x) = why
