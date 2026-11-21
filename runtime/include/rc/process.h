@@ -86,6 +86,8 @@ typedef struct rc_module {
 const rc_module *rc_module_find(const char *name);
 /* The module loaded at `base`, or NULL. */
 const rc_module *rc_module_at(uint32_t base);
+/* The module whose image holds `addr`, or NULL. */
+const rc_module *rc_module_containing(uint32_t addr);
 /* The address of an export, by name or "#ordinal", or 0. */
 uint32_t rc_module_export(const rc_module *m, const char *name);
 

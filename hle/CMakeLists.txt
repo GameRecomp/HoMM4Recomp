@@ -42,6 +42,7 @@ add_library(rc_hle STATIC
     ddraw/d3d.c
     frames.c
     mss32/mss32.c
+    mss32/rib.c
     winmm/winmm.c
     winmm/mci.c
 )

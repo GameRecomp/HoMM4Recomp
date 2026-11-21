@@ -63,6 +63,7 @@ void rc_hle_ddraw(void)
 void rc_hle_mss32(void)
 {
     rc_register_imports(rc_mss32_defs, rc_mss32_count);
+    rc_register_imports(rc_rib_defs, rc_rib_count);
     rc_mss32_init();
 }
 

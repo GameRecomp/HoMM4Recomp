@@ -104,6 +104,16 @@ static int same_name(const char *a, const char *b)
     return 1;
 }
 
+const rc_module *rc_module_containing(uint32_t addr)
+{
+    for (uint32_t i = 0; i < nmodules; i++) {
+        if (addr >= modules[i].base && addr - modules[i].base < modules[i].size) {
+            return &modules[i];
+        }
+    }
+    return NULL;
+}
+
 const rc_module *rc_module_find(const char *name)
 {
     for (uint32_t i = 0; i < nmodules; i++) {
