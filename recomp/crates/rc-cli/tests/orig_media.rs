@@ -22,6 +22,9 @@ fn every_medium_in_orig_matches_its_manifest() {
     for m in &ms {
         for v in &m.variants {
             for md in &v.media {
+                if md.kind == rc_manifest::MediaKind::Slice {
+                    continue; // read through its installer
+                }
                 let path = repo().join("orig").join(&md.file);
                 if !path.is_file() {
                     eprintln!("skip {} (not present)", md.file);

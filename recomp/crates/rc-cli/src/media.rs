@@ -117,8 +117,14 @@ pub fn extract_game(
         .collect();
     files.sort();
     for v in &m.variants {
-        // One medium per variant (every manifest so far); a set of several is unpacked by hand.
-        let [medium] = v.media.as_slice() else {
+        // The medium that is opened: the only one, or the installer beside its data slices
+        // (which `extract` finds next to it).
+        let opened: Vec<_> = v
+            .media
+            .iter()
+            .filter(|m| m.kind != rc_manifest::MediaKind::Slice)
+            .collect();
+        let [medium] = opened.as_slice() else {
             continue;
         };
         for (path, _) in files.iter().filter(|(_, size)| *size == medium.size) {
