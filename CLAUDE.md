@@ -22,7 +22,8 @@ RC_TRACE=imports|messages  RC_TRACE_SEH=1  RC_RIB_DUMP=1   # traces
 ## Facts that matter
 
 - Input: `orig/setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023).exe` + `…-1.bin` (git-ignored).
-  Neither sister project's extractor reads it yet; innoextract 1.9 does (use only as a reference / stopgap).
+  `recomp extract` unpacks it (Inno 5.6.2, external slice, GOG Galaxy parts, the GOG script's registry keys)
+  byte-identical to innoextract 1.9.
 - `Heroes4.exe`: MSVC 6, base `0x400000`, no relocations, 5.43 MiB `.text`, RTTI present. DirectDraw 7,
   DirectSound, window-message input, Miles only for its MP3 codec (RIB), Bink lifted, WSOCK32 by ordinal, threads,
   file mappings of large `.h4r` archives.
