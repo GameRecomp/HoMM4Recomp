@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MIT
+# Skip the intro movies, New Game, Scenario, the first scenario of the list, its player
+# settings, start; close the opening message, open and leave the first town, end the first
+# turn (confirm), let the computer players move: day 2. Coordinates at 1024x768.
+220 key 27
+222 keyup 27
+300 key 27
+302 keyup 27
+380 move 512 384
+382 down 1
+384 up 1
+460 key 27
+462 keyup 27
+700 move 895 142
+720 down 1
+724 up 1
+790 move 660 180
+800 down 1
+804 up 1
+1000 move 776 640
+1010 down 1
+1014 up 1
+1300 move 780 646
+1310 down 1
+1314 up 1
+# close the message
+1800 move 510 436
+1810 down 1
+1814 up 1
+# select the hero on the map and move it twice to a spot (click target, click again to go)
+1850 move 300 560
+1860 down 1
+1864 up 1
+1900 down 1
+1904 up 1
+# leave the town (the check mark)
+2100 move 967 733
+2110 down 1
+2114 up 1
+# end the turn (hourglass)
+2250 move 980 710
+2260 down 1
+2264 up 1
+# confirm ending the turn
+3200 move 885 651
+3210 down 1
+3214 up 1
