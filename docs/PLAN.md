@@ -255,7 +255,11 @@ Binary treatment (first proposal, see M2 and M6):
       objects), which CulturesRecomp's `dpnet` on its own network (`hle/dplay/net.c`) provides; the game uses
       `WSOCK32` only for its host name and address and GameSpy. Hosting a TCP/IP game reaches the network
       game's scenario list
-- [ ] TCP/IP host and join between two recompiled builds on one machine and on a LAN; a full game played
+- [x] TCP/IP host and join between two recompiled programs on one machine: the joining program finds the
+      host's game at 127.0.0.1 (server, map, ping), joins with a player name and reaches the game set-up, where
+      the host lists it (two scripted runs lined up with `shot`/`wait`)
+- [ ] Both players take slots and the game starts; a full game played; on a LAN; the host's IP address shown
+      (now 0.0.0.0 or nonsense: `gethostbyname` of our host name)
 - [ ] GameSpy: the menu entries fail cleanly; no connection attempts to dead servers (patch if needed)
 - [ ] Browser: no raw sockets — WebSocket relay or "not available" (decision when there)
 
