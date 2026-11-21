@@ -119,6 +119,31 @@ static void init(void)
     n.ready = true;
 }
 
+/* The address of this machine others on the network reach it at (in network byte order): the
+ * one a UDP socket would send from towards the internet (no packet is sent); 127.0.0.1 without a
+ * network. */
+uint32_t net_local_ipv4(void)
+{
+    init();
+    uint32_t ip = htonl(0x7f000001u);
+    SOCKET s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s == INVALID_SOCKET) {
+        return ip;
+    }
+    struct sockaddr_in to = {0};
+    to.sin_family = AF_INET;
+    to.sin_port = htons(53);
+    to.sin_addr.s_addr = htonl(0x08080808u);
+    struct sockaddr_in me = {0};
+    socklen_t len = sizeof me;
+    if (connect(s, (struct sockaddr *)&to, sizeof to) == 0 && getsockname(s, (struct sockaddr *)&me, &len) == 0 &&
+        me.sin_addr.s_addr != 0) {
+        ip = me.sin_addr.s_addr;
+    }
+    CLOSESOCK(s);
+    return ip;
+}
+
 /* ---- players ---- */
 
 static void free_player(net_player *p)

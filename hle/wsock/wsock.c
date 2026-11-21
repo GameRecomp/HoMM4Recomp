@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "dplay/net.h"
+#include "rc/process.h"
 #include "rc/vm.h"
 
 #define WS1 "wsock32.dll"
@@ -149,11 +151,37 @@ static void k_gethostname(rc_cpu *c)
     RC_RETURN(c, 0, 2);
 }
 
-/* gethostbyname(name): not found (no network to ask). */
+/* gethostbyname(name): this machine (its own name, as gethostname gives it, or "localhost"), whose
+ * address programs show to the players that want to join; other names are not looked up (the
+ * servers games of the time asked are gone). */
 static void k_gethostbyname(rc_cpu *c)
 {
-    last_error = WSAHOST_NOT_FOUND;
-    RC_RETURN(c, 0, 1);
+    const char *name = RC_ARG(c, 0) ? rc_str(RC_ARG(c, 0)) : "";
+    if (strcmp(name, "recomp") != 0 && strcmp(name, "localhost") != 0 && name[0]) {
+        last_error = WSAHOST_NOT_FOUND;
+        RC_RETURN(c, 0, 1);
+    }
+    /* HOSTENT: name, aliases, type (short), length (short), address list; then the strings,
+     * lists and the address. */
+    static uint32_t he;
+    if (!he) {
+        he = rc_proc_alloc(64);
+    }
+    uint32_t aliases = he + 16, list = he + 24, addr = he + 32, str = he + 40;
+    rc_put_str(str, 16, "recomp");
+    rc_st32(he, str);
+    rc_st32(he + 4, aliases);
+    rc_st16(he + 8, 2); /* AF_INET */
+    rc_st16(he + 10, 4);
+    rc_st32(he + 12, list);
+    rc_st32(aliases, 0);
+    rc_st32(list, addr);
+    rc_st32(list + 4, 0);
+    uint32_t ip = net_local_ipv4();
+    for (int i = 0; i < 4; i++) {
+        rc_st8(addr + (uint32_t)i, (uint8_t)(ip >> (8 * i)));
+    }
+    RC_RETURN(c, he, 1);
 }
 
 #define BOTH(ord1, ord2, name, fn)                                                                 \

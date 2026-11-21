@@ -88,6 +88,9 @@ void net_player_ip(uint32_t id, char *out, int cap);
 /* A message to one player or (to = 0) to everyone else. */
 void net_send(uint32_t from, uint32_t to, const void *data, uint32_t size);
 
+/* This machine's address on the network (network byte order; 127.0.0.1 without one). */
+uint32_t net_local_ipv4(void);
+
 /* Take what arrived (also done at every message pump while a session is open). */
 void net_poll(void);
 
