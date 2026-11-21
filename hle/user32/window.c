@@ -809,6 +809,12 @@ static rc_rect default_client(const window *w, rc_rect r)
     r.t += b + caption_of(w);
     r.r -= b;
     r.b -= b;
+    if (w->game && !(w->style & WS_CHILD) && w->menu) {
+        /* A game window with a menu bar (Heroes IV) is placed by AdjustWindowRectEx with room for
+         * the bar above the screen; the bar is not drawn, but its room counts, so the client
+         * area is the screen where the program put it. */
+        r.t += 20;
+    }
     if (!w->game) {
         if (!(w->style & WS_CHILD) && w->menu) {
             r.t += rc_menu_bar_height(handle_of(w));
@@ -903,7 +909,8 @@ static uint32_t create(rc_cpu *c, uint32_t exstyle, uint32_t cls_arg, const char
         /* a top-level window's owner is the top-level window of what was passed */
         w->owner = parent ? rc_wnd_top_level(parent) : 0;
         w->parent = w->owner;
-        w->menu = menu;
+        /* No menu given: the class's menu, as Windows loads it (Heroes IV's game window). */
+        w->menu = menu ? menu : k->menu_name ? rc_menu_load(k->instance ? k->instance : inst, k->menu_name) : 0;
         w->z = ++z_top;
         vis_gen++;
     }

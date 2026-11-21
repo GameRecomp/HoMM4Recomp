@@ -247,13 +247,15 @@ static uint32_t load_template(uint32_t p)
     return h;
 }
 
-static void k_LoadMenuA(rc_cpu *c)
+uint32_t rc_menu_load(uint32_t inst, uint32_t name)
 {
-    uint32_t inst = RC_ARG(c, 0), name = RC_ARG(c, 1), data, size;
+    uint32_t data, size;
     bool found = name < 0x10000 ? rc_resource(inst, 4, name, &data, &size)
                                 : rc_resource_named(inst, 4, rc_str(name), &data, &size);
-    RC_RETURN(c, found ? load_template(data) : 0, 2);
+    return found ? load_template(data) : 0;
 }
+
+static void k_LoadMenuA(rc_cpu *c) { RC_RETURN(c, rc_menu_load(RC_ARG(c, 0), RC_ARG(c, 1)), 2); }
 
 static void k_LoadMenuIndirectA(rc_cpu *c) { RC_RETURN(c, load_template(RC_ARG(c, 0)), 1); }
 static void k_CreateMenu(rc_cpu *c) { RC_RETURN(c, new_menu(false), 0); }

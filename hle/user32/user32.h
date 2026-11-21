@@ -68,6 +68,8 @@ uint32_t rc_wnd_owner(uint32_t hwnd);    /* the owner of a top-level window */
 uint32_t rc_wnd_id(uint32_t hwnd);
 uint32_t rc_wnd_instance(uint32_t hwnd);
 uint32_t rc_wnd_menu(uint32_t hwnd);     /* a top-level window's menu bar */
+/* A menu resource (LoadMenuA): the menu's handle, or 0. */
+uint32_t rc_menu_load(uint32_t inst, uint32_t name);
 void rc_wnd_set_menu(uint32_t hwnd, uint32_t menu);
 const char *rc_wnd_text(uint32_t hwnd);
 void rc_wnd_set_text(uint32_t hwnd, const char *text);
