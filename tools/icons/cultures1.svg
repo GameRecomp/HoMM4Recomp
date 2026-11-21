@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Cultures 1's icon: a Viking with a horned helmet against a warm sky, in the round, ringed
+     style of the game's GOG icon; drawn for this project. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="sky" cx="0.5" cy="0.38" r="0.62">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset="0.55" stop-color="#e8862a"/>
+      <stop offset="1" stop-color="#7a2e0c"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f4f4"/>
+      <stop offset="0.5" stop-color="#b9bcc2"/>
+      <stop offset="1" stop-color="#7d8189"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9dde3"/>
+      <stop offset="1" stop-color="#6d737c"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="128" cy="128" r="108"/></clipPath>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#ring)"/>
+  <circle cx="128" cy="128" r="110" fill="#5a5d63"/>
+  <g clip-path="url(#disc)">
+    <circle cx="128" cy="128" r="108" fill="url(#sky)"/>
+    <!-- shoulders and fur -->
+    <path d="M40 256 C46 200 82 178 128 176 C174 178 210 200 216 256 Z" fill="#6b3d1e"/>
+    <path d="M58 214 C78 190 100 186 128 186 C156 186 178 190 198 214 C176 206 152 204 128 206 C104 204 80 206 58 214 Z" fill="#c9a26b"/>
+    <!-- beard and face -->
+    <path d="M92 132 C92 176 108 196 128 200 C148 196 164 176 164 132 Z" fill="#a8521e"/>
+    <path d="M98 112 C98 146 110 162 128 164 C146 162 158 146 158 112 Z" fill="#f2c08e"/>
+    <path d="M104 150 C114 160 142 160 152 150 C150 178 140 188 128 190 C116 188 106 178 104 150 Z" fill="#c4682a"/>
+    <circle cx="114" cy="128" r="5" fill="#3a2414"/>
+    <circle cx="142" cy="128" r="5" fill="#3a2414"/>
+    <path d="M118 150 Q128 156 138 150" stroke="#7a3412" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <!-- horns -->
+    <path d="M96 100 C78 96 62 78 60 52 C72 70 86 80 102 84 Z" fill="#f3ead2" stroke="#8c7a54" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M160 100 C178 96 194 78 196 52 C184 70 170 80 154 84 Z" fill="#f3ead2" stroke="#8c7a54" stroke-width="3" stroke-linejoin="round"/>
+    <!-- helmet -->
+    <path d="M90 116 C90 74 108 58 128 58 C148 58 166 74 166 116 Z" fill="url(#steel)" stroke="#3d4148" stroke-width="3"/>
+    <rect x="86" y="108" width="84" height="12" rx="4" fill="#9a7a3a" stroke="#4a3816" stroke-width="2"/>
+    <path d="M122 64 H134 V140 L128 146 L122 140 Z" fill="#a9aeb6" stroke="#3d4148" stroke-width="2"/>
+  </g>
+</svg>

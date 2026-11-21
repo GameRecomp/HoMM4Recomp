@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# What the build scripts need to know about a game, sourced (as in TropicoRecomp):
+#
+#   . tools/game-info GAME
+#
+# sets GAME_NAME (shown), GAME_STEM (file and folder names; rc_convert::stem), GAME_APP_ID
+# (desktop), GAME_ANDROID_ID (the Android package), GAME_WEB (the web shell's file name),
+# GAME_ICON (tools/icons/<icon>.svg), GAME_INSTALLER (what the converter takes: the GOG installer's
+# file name), GAME_SUMMARY, GAME_DESCRIPTION and GAME_KEYWORDS.
+case "${1:-cultures1}" in
+    cultures1)
+        GAME_INSTALLER=setup_cultures_2.1.0.12.exe
+        GAME_NAME="Cultures: Discovery of Vinland"
+        GAME_STEM=Cultures
+        GAME_DESCRIPTION="The 2000 settlement game Cultures: Discovery of Vinland"
+        ;;
+    cultures2)
+        GAME_INSTALLER=setup_cultures2_2.1.0.10.exe
+        GAME_NAME="Cultures 2: The Gates of Asgard"
+        GAME_STEM=Cultures2
+        GAME_DESCRIPTION="The 2002 settlement game Cultures 2: The Gates of Asgard"
+        ;;
+    northland)
+        GAME_INSTALLER=setup_northland_2.1.0.9.exe
+        GAME_NAME="Cultures: Northland"
+        GAME_STEM=Northland
+        GAME_DESCRIPTION="The 2002 settlement game Cultures: Northland"
+        ;;
+    eighthwonder)
+        GAME_INSTALLER=setup_8th_wonder_2.1.0.9.exe
+        GAME_NAME="Cultures: 8th Wonder of the World"
+        GAME_STEM=EighthWonder
+        GAME_DESCRIPTION="The 2003 settlement game Cultures: 8th Wonder of the World"
+        ;;
+    saga)
+        GAME_INSTALLER='"Cultures Saga.zip" (a zip of the game installed from its CD)'
+        GAME_NAME="Cultures: Die Saga"
+        GAME_STEM=CulturesSaga
+        GAME_DESCRIPTION="The 2003 collection Cultures: Die Saga"
+        ;;
+    *)
+        echo "game-info: unknown game ${1}" >&2
+        return 1 2>/dev/null || exit 1
+        ;;
+esac
+GAME_ID=${1:-cultures1}
+GAME_APP_ID=io.github.gamerecomp.${GAME_STEM}Recomp
+GAME_ANDROID_ID=io.github.gamerecomp.$(printf '%s' "$GAME_STEM" | tr '[:upper:]' '[:lower:]')recomp
+GAME_WEB=$GAME_ID
+GAME_ICON=$GAME_ID
+GAME_SUMMARY="$GAME_NAME, recompiled to run natively"
+GAME_KEYWORDS="Cultures;Funatics;settlement;strategy;"

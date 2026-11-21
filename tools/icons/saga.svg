@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Die Saga's icon: a rune stone with a dragon carved in it (the Drachenland campaign), in the
+     teal of the game's menus and the round, ringed style of the series' icons; drawn for this
+     project. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="sky" cx="0.5" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#9fd4cc"/>
+      <stop offset="0.6" stop-color="#2f7c78"/>
+      <stop offset="1" stop-color="#0f3534"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d4d6d2"/>
+      <stop offset="1" stop-color="#7e837f"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f4f4"/>
+      <stop offset="0.5" stop-color="#b9bcc2"/>
+      <stop offset="1" stop-color="#7d8189"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="128" cy="128" r="108"/></clipPath>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#ring)"/>
+  <circle cx="128" cy="128" r="110" fill="#5a5d63"/>
+  <g clip-path="url(#disc)">
+    <circle cx="128" cy="128" r="108" fill="url(#sky)"/>
+    <path d="M0 214 C60 196 196 196 256 214 V256 H0 Z" fill="#335a2c"/>
+    <!-- the stone -->
+    <path d="M78 216 C70 160 74 92 96 62 C112 42 146 42 162 62 C184 92 188 160 180 216 Z" fill="url(#stone)" stroke="#3d423e" stroke-width="4" stroke-linejoin="round"/>
+    <!-- the dragon carved in it: a serpent band ending in a head -->
+    <path d="M150 196 C112 196 100 174 116 156 C132 138 158 146 150 124 C142 102 104 112 104 90 C104 74 124 66 140 74" fill="none" stroke="#b8322a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M150 196 C112 196 100 174 116 156 C132 138 158 146 150 124 C142 102 104 112 104 90 C104 74 124 66 140 74" fill="none" stroke="#e8574a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M136 66 L158 64 L150 74 L160 82 L138 82 Z" fill="#b8322a" stroke="#5a1410" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="146" cy="72" r="2.5" fill="#fff2c0"/>
+    <!-- runes -->
+    <g stroke="#3d423e" stroke-width="3.5" fill="none" stroke-linecap="round">
+      <path d="M92 120 V146 M92 126 L100 120"/>
+      <path d="M164 168 V194 M164 176 L156 168 M164 176 L172 168"/>
+      <path d="M96 180 L104 192 L112 180"/>
+    </g>
+  </g>
+</svg>

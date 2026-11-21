@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- 8th Wonder of the World's icon: a lighthouse of the ancient world with its fire, and a
+     Viking sail before it, golden like the game's GOG icon; drawn for this project. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1c4"/>
+      <stop offset="0.6" stop-color="#e3b25a"/>
+      <stop offset="1" stop-color="#8a5a1e"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f0dcae"/>
+      <stop offset="1" stop-color="#b08a4e"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f4f4"/>
+      <stop offset="0.5" stop-color="#b9bcc2"/>
+      <stop offset="1" stop-color="#7d8189"/>
+    </linearGradient>
+    <radialGradient id="fire" cx="0.5" cy="0.6" r="0.6">
+      <stop offset="0" stop-color="#fffbe0"/>
+      <stop offset="0.5" stop-color="#ffb52a"/>
+      <stop offset="1" stop-color="#e2541a" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="disc"><circle cx="128" cy="128" r="108"/></clipPath>
+    <clipPath id="sail"><path d="M168 150 C178 146 214 146 222 150 L218 196 C206 192 182 192 172 196 Z"/></clipPath>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#ring)"/>
+  <circle cx="128" cy="128" r="110" fill="#5a5d63"/>
+  <g clip-path="url(#disc)">
+    <rect width="256" height="256" fill="url(#sky)"/>
+    <circle cx="112" cy="46" r="34" fill="url(#fire)"/>
+    <!-- the lighthouse: three tiers on a base -->
+    <path d="M70 226 H154 L146 196 H78 Z" fill="url(#stone)" stroke="#6b4a1e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M82 196 H142 L134 118 H90 Z" fill="url(#stone)" stroke="#6b4a1e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M94 118 H130 L125 80 H99 Z" fill="url(#stone)" stroke="#6b4a1e" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M102 80 H122 L118 58 H106 Z" fill="url(#stone)" stroke="#6b4a1e" stroke-width="3" stroke-linejoin="round"/>
+    <g fill="#5a3a12">
+      <rect x="108" y="134" width="8" height="14" rx="3"/><rect x="108" y="160" width="8" height="14" rx="3"/>
+      <rect x="108" y="92" width="8" height="12" rx="3"/>
+    </g>
+    <path d="M112 62 C102 50 108 40 112 30 C116 40 122 50 112 62 Z" fill="#ff8a1a" stroke="#b8400c" stroke-width="2"/>
+    <!-- sea -->
+    <rect y="214" width="256" height="42" fill="#2a6a8a"/>
+    <path d="M10 222 Q30 214 50 222 T90 222 T130 222 T170 222 T210 222 T250 222" stroke="#b8e2f0" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <!-- a Viking sail -->
+    <g transform="translate(-22,-4)">
+    <rect x="193" y="138" width="5" height="76" fill="#4a2c14"/>
+    <g clip-path="url(#sail)">
+      <rect x="160" y="140" width="70" height="60" fill="#f2ead8"/>
+      <g fill="#2b5fae"><rect x="164" y="140" width="11" height="60"/><rect x="186" y="140" width="11" height="60"/><rect x="208" y="140" width="11" height="60"/></g>
+    </g>
+    <path d="M160 210 C176 222 214 222 232 210 C228 222 214 228 196 228 C178 228 164 222 160 210 Z" fill="#6b3d1e" stroke="#2e1a0a" stroke-width="2.5"/>
+    </g>
+  </g>
+</svg>

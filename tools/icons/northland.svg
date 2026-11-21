@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Northland's icon: a longship with a red and white sail on a northern sea, in the round,
+     ringed style of the game's GOG icon; drawn for this project. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfe2ef"/>
+      <stop offset="0.55" stop-color="#6f9cbf"/>
+      <stop offset="1" stop-color="#21466b"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d6d96"/>
+      <stop offset="1" stop-color="#0d2b45"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f4f4"/>
+      <stop offset="0.5" stop-color="#b9bcc2"/>
+      <stop offset="1" stop-color="#7d8189"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="128" cy="128" r="108"/></clipPath>
+    <clipPath id="sail"><path d="M76 72 C100 66 156 66 180 72 L172 156 C150 150 106 150 84 156 Z"/></clipPath>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#ring)"/>
+  <circle cx="128" cy="128" r="110" fill="#5a5d63"/>
+  <g clip-path="url(#disc)">
+    <rect width="256" height="256" fill="url(#sky)"/>
+    <path d="M20 150 L70 104 L104 138 L150 92 L210 150 Z" fill="#e8eef3" opacity="0.8"/>
+    <rect y="168" width="256" height="88" fill="url(#sea)"/>
+    <!-- mast and sail -->
+    <rect x="124" y="50" width="8" height="132" fill="#4a2c14"/>
+    <g clip-path="url(#sail)">
+      <rect x="70" y="60" width="120" height="100" fill="#f2ead8"/>
+      <g fill="#c22a22">
+        <rect x="70" y="60" width="18" height="100"/>
+        <rect x="106" y="60" width="18" height="100"/>
+        <rect x="142" y="60" width="18" height="100"/>
+        <rect x="178" y="60" width="18" height="100"/>
+      </g>
+    </g>
+    <path d="M76 72 C100 66 156 66 180 72 L172 156 C150 150 106 150 84 156 Z" fill="none" stroke="#5a3a1a" stroke-width="3"/>
+    <!-- hull with dragon prow and stern -->
+    <path d="M44 166 C70 188 186 188 212 166 C206 186 186 200 128 200 C70 200 50 186 44 166 Z" fill="#6b3d1e" stroke="#2e1a0a" stroke-width="3"/>
+    <path d="M212 166 C222 150 222 132 210 124 C222 122 230 132 226 148 C224 158 218 164 212 170 Z" fill="#6b3d1e" stroke="#2e1a0a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M44 166 C36 152 38 138 48 132 C40 144 44 156 50 164 Z" fill="#6b3d1e" stroke="#2e1a0a" stroke-width="3" stroke-linejoin="round"/>
+    <g fill="#d8b04a" stroke="#5a3a08" stroke-width="2">
+      <circle cx="86" cy="182" r="7"/><circle cx="108" cy="185" r="7"/><circle cx="130" cy="186" r="7"/>
+      <circle cx="152" cy="185" r="7"/><circle cx="174" cy="182" r="7"/>
+    </g>
+    <!-- waves -->
+    <path d="M20 210 Q44 198 68 210 T116 210 T164 210 T212 210 T260 210" stroke="#bfe0f2" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.8"/>
+    <path d="M0 232 Q24 220 48 232 T96 232 T144 232 T192 232 T240 232" stroke="#8fc2e0" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>
+  </g>
+</svg>
