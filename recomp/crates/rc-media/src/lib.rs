@@ -425,16 +425,28 @@ pub fn open(path: &Path) -> Result<(MediaType, Box<dyn Archive>)> {
 
 /// Open a medium from any reader (in a browser: the chosen file in pieces): a zip of an installed
 /// copy or an Inno Setup installer. CD images need [`open`].
-pub fn open_reader(mut r: Box<dyn ReadSeek>) -> Result<(MediaType, Box<dyn Archive>)> {
+pub fn open_reader(r: Box<dyn ReadSeek>) -> Result<(MediaType, Box<dyn Archive>)> {
+    open_readers(r, Vec::new())
+}
+
+/// [`open_reader`] for an Inno Setup installer whose data is in external slice files
+/// (`setup_….exe` and its `-1.bin`, …), given in slice order.
+pub fn open_readers(
+    mut r: Box<dyn ReadSeek>,
+    slices: Vec<Box<dyn ReadSeek>>,
+) -> Result<(MediaType, Box<dyn Archive>)> {
     let mut magic = [0u8; 4];
     r.seek(SeekFrom::Start(0))?;
     let got = r.read(&mut magic)?;
     r.seek(SeekFrom::Start(0))?;
-    if got >= 4 && magic == *b"PK\x03\x04" {
+    if got >= 4 && magic == *b"PK\x03\x04" && slices.is_empty() {
         return Ok((MediaType::Zip, Box::new(zip::Zip::from_reader(r)?)));
     }
     if got >= 2 && magic[..2] == *b"MZ" {
-        return Ok((MediaType::Inno, Box::new(inno::Installer::from_reader(r)?)));
+        return Ok((
+            MediaType::Inno,
+            Box::new(inno::Installer::from_readers(r, slices)?),
+        ));
     }
     format_err("neither a GOG installer nor a zip")
 }

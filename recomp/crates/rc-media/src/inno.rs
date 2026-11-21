@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-//! Inno Setup reader for the GOG installers: setup data version **5.5.0 (unicode)** with
-//! the data embedded in the installer exe. Other versions are refused with
+//! Inno Setup reader for the GOG installers: setup data versions **5.5.0 (unicode)** and
+//! **5.6.2 (unicode)**, with the file data embedded in the installer exe or in external
+//! slices (`setup_….exe` + `setup_…-1.bin`, …). Other versions are refused with
 //! [`Error::Unsupported`] rather than guessed at.
 //!
 //! Layout (format facts as documented by innoextract; this is an independent implementation):
@@ -12,9 +13,18 @@
 //!   compressed as one LZMA1 stream. Block 1 holds the setup header and the entry lists,
 //!   block 2 the data entries (file locations).
 //! - File data lives in chunks at `setup-1 + chunk_offset`: magic `zlb\x1a`, then the
-//!   chunk compressed with the header's method (LZMA1 for these installers). Files are
+//!   chunk compressed with the header's method (LZMA1 for these installers). When the
+//!   loader's setup-1 offset is 0 the data is in slice files instead: each begins with a
+//!   12-byte header (`idska32\x1a`, the slice's size), and a data entry's chunk offset is
+//!   counted from the start of its first slice file. Files are
 //!   ranges of the decompressed chunk. Executables may be stored with Inno's x86
 //!   call-instruction filter, which is reversed here. Every file is SHA-1 checked.
+//! - GOG's Galaxy-style installers (2018+) install every file as `{tmp}\xx\yy\<md5>`, a
+//!   part of at most 10 MiB, and their script puts the parts together. The file entries'
+//!   conditions say how: `before_install('<md5>', '<path>', <parts>)` on a file's first part
+//!   (`before_install_dependency` for redistributables), `after_install('<md5>', <stored size>,
+//!   <size>)` on every part, the next parts following in order. Every part is a zlib stream
+//!   (even when its stored size equals its size). These are read as the files they make.
 
 use crate::{format_err, Archive, DirSink, Entry, Error, ReadSeek, Result, Sink, SubReader};
 use sha1::{Digest, Sha1};
@@ -27,7 +37,15 @@ const LOADER_MAGICS: [[u8; 12]; 2] = [
     *b"rDlPtS\xcd\xe6\xd7\x7b\x0b\x2a",
     *b"nS5W7dT\x83\xaa\x1b\x0f\x6a",
 ];
-const SUPPORTED_VERSION: &[u8] = b"Inno Setup Setup Data (5.5.0) (u)";
+/// A setup data version: major, minor, patch.
+type Version = (u8, u8, u8);
+
+/// The setup data versions read here, with their version numbers.
+const SUPPORTED_VERSIONS: [(&[u8], Version); 2] = [
+    (b"Inno Setup Setup Data (5.5.0) (u)", (5, 5, 0)),
+    (b"Inno Setup Setup Data (5.6.2) (u)", (5, 6, 2)),
+];
+const SLICE_MAGIC: &[u8; 8] = b"idska32\x1a";
 const CHUNK_MAGIC: &[u8; 4] = b"zlb\x1a";
 
 const COMPRESSION_STORED: u8 = 0;
@@ -41,6 +59,7 @@ const DATA_FLAG_COMPRESSED: u16 = 1 << 7;
 #[derive(Debug, Clone)]
 struct DataEntry {
     first_slice: u32,
+    last_slice: u32,
     chunk_offset: u32,
     file_offset: u64,
     file_size: u64,
@@ -62,13 +81,41 @@ pub struct SetupInfo {
 pub struct Installer {
     file: Box<dyn ReadSeek>,
     data_offset: u64,
+    /// The external slice files, by slice number (empty when the data is embedded); `None`
+    /// for one that could not be opened (an error only when a chunk needs it).
+    slices: Vec<Option<Box<dyn ReadSeek>>>,
     info: SetupInfo,
     entries: Vec<Entry>,
     directories: Vec<String>,
-    /// Data entry index of each entry in `entries`.
-    location: Vec<usize>,
+    /// Where the bytes of each entry in `entries` come from.
+    location: Vec<Source>,
     data: Vec<DataEntry>,
     registry: Vec<RegistryEntry>,
+    slices_per_disk: u32,
+}
+
+/// Where an entry's bytes are.
+#[derive(Debug, Clone)]
+enum Source {
+    /// One data entry, as stored.
+    Data(usize),
+    /// GOG Galaxy parts, in order.
+    Parts(Vec<Part>),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Part {
+    data: usize,
+    /// Its size after inflating.
+    size: u64,
+}
+
+/// One `[Files]` entry: what the reader needs of it.
+struct FileEntry {
+    dest: String,
+    location: u32,
+    after: String,
+    before: String,
 }
 
 /// A value the installer writes into the registry (`[Registry]` in the setup script).
@@ -164,6 +211,7 @@ const WINVER_RANGE: usize = 20;
 const ITEM_CONDITIONS: usize = 6; // components, tasks, languages, check, after/before install
 
 struct Counts {
+    slices_per_disk: u32,
     language: u32,
     message: u32,
     permission: u32,
@@ -179,35 +227,88 @@ struct Counts {
 }
 
 impl Installer {
+    /// The installer at `path`; external slices are opened beside it
+    /// (`setup_x.exe` → `setup_x-1.bin`, `setup_x-2.bin`, …).
     pub fn open(path: &Path) -> Result<Self> {
-        Self::from_reader(Box::new(File::open(path)?))
+        let mut inst = Self::parse(Box::new(File::open(path)?), Vec::new())?;
+        if inst.data_offset == 0 {
+            let stem = path.with_extension("");
+            let stem = stem.to_string_lossy();
+            let count = inst
+                .data
+                .iter()
+                .map(|d| d.last_slice + 1)
+                .max()
+                .unwrap_or(0);
+            for i in 0..count {
+                let name = slice_name(&stem, i, inst.slices_per_disk);
+                inst.slices.push(
+                    File::open(&name)
+                        .ok()
+                        .map(|f| Box::new(f) as Box<dyn ReadSeek>),
+                );
+            }
+        }
+        inst.add_gog_script_registry();
+        Ok(inst)
     }
 
     /// The installer read from `file` (in a browser: the chosen file, read in pieces).
-    pub fn from_reader(mut file: Box<dyn ReadSeek>) -> Result<Self> {
-        let (header_offset, data_offset) = find_offset_table(&mut file)?;
-        if data_offset == 0 {
-            return Err(Error::Unsupported(
-                "installer data in external setup-*.bin files".into(),
-            ));
+    pub fn from_reader(file: Box<dyn ReadSeek>) -> Result<Self> {
+        Self::from_readers(file, Vec::new())
+    }
+
+    /// The installer read from `file`, its external slices (if any) from `slices`, in slice
+    /// order (`-1.bin` first).
+    pub fn from_readers(file: Box<dyn ReadSeek>, slices: Vec<Box<dyn ReadSeek>>) -> Result<Self> {
+        let mut inst = Self::parse(file, slices)?;
+        inst.add_gog_script_registry();
+        Ok(inst)
+    }
+
+    /// GOG's Galaxy installers leave part of the set-up to `goggame-<id>.script` (JSON), run
+    /// after the files are in place: its `setRegistry` actions are added to the installer's
+    /// registry entries. Actions limited to some Windows versions (`os`) are compatibility
+    /// settings for those and are left out. Without the script (or its data) nothing is added.
+    fn add_gog_script_registry(&mut self) {
+        let Some(i) = self.entries.iter().position(|e| {
+            let p = e.path.to_ascii_lowercase();
+            p.starts_with("goggame-") && p.ends_with(".script") && !p.contains('/')
+        }) else {
+            return;
+        };
+        let Source::Parts(_) = self.location[i] else {
+            return;
+        };
+        let mut mem = MemSink(Vec::new());
+        if self.extract_parts(i, &mut mem).is_err() {
+            return;
         }
+        self.registry.extend(gog_script_registry(&mem.0));
+    }
+
+    fn parse(mut file: Box<dyn ReadSeek>, slices: Vec<Box<dyn ReadSeek>>) -> Result<Self> {
+        let (header_offset, data_offset) = find_offset_table(&mut file)?;
         let mut r = BufReader::new(&mut file);
         r.seek(SeekFrom::Start(header_offset))?;
         let mut version = [0u8; 64];
         r.read_exact(&mut version)?;
         let vend = version.iter().position(|&c| c == 0).unwrap_or(64);
-        if &version[..vend] != SUPPORTED_VERSION {
+        let Some(&(_, ver)) = SUPPORTED_VERSIONS
+            .iter()
+            .find(|(v, _)| *v == &version[..vend])
+        else {
             return Err(Error::Unsupported(format!(
-                "Inno Setup data version {:?} (only 5.5.0 unicode)",
+                "Inno Setup data version {:?} (only 5.5.0 and 5.6.2 unicode)",
                 String::from_utf8_lossy(&version[..vend])
             )));
-        }
+        };
         let block1 = read_block(&mut r)?;
         let block2 = read_block(&mut r)?;
         drop(r);
 
         let mut p = P { b: &block1, o: 0 };
-        let (info, counts, compression) = parse_header(&mut p)?;
+        let (info, counts, compression) = parse_header(&mut p, ver)?;
         let dir_names = skip_entries(&mut p, &counts)?;
         let directories: Vec<String> = dir_names
             .iter()
@@ -235,28 +336,71 @@ impl Installer {
         let mut entries = Vec::new();
         let mut location = Vec::new();
         let mut seen = BTreeMap::new();
-        for (dest, loc) in files {
-            // Only files installed below {app}; {tmp}, {commonappdata} etc. are installer glue.
-            let Some(rel) = strip_app(&dest) else {
-                continue;
-            };
-            let Some(d) = data.get(loc as usize) else {
-                continue;
-            };
-            let path = rel.replace('\\', "/");
+        let mut add = |path: String, size: u64, src: Source| {
             if seen.insert(path.to_ascii_lowercase(), ()).is_some() {
-                continue; // same destination listed twice (conditional variants): keep the first
+                return; // same destination listed twice (conditional variants): keep the first
             }
-            entries.push(Entry {
-                path,
-                size: d.file_size,
-            });
-            location.push(loc as usize);
+            entries.push(Entry { path, size });
+            location.push(src);
+        };
+        // A Galaxy file being put together: path, parts expected, parts so far.
+        let mut open: Option<(String, usize, Vec<Part>)> = None;
+        let mut plain = Vec::new();
+        let mut galaxy_files = false;
+        for f in files {
+            let Some(d) = data.get(f.location as usize) else {
+                continue;
+            };
+            if let Some(part) = galaxy_part(&f.after) {
+                let part = Part {
+                    data: f.location as usize,
+                    ..part
+                };
+                if Some(d.file_size) != galaxy_stored(&f.after) {
+                    return format_err(format!("{}: part size disagrees", f.dest));
+                }
+                if let Some((path, count)) = galaxy_file(&f.before) {
+                    if let Some((p, n, parts)) = open.take() {
+                        return format_err(format!("{p}: {} of {n} parts", parts.len()));
+                    }
+                    open = Some((path, count, Vec::new()));
+                }
+                let Some((_, count, parts)) = open.as_mut() else {
+                    return format_err(format!("{}: a part without its file", f.dest));
+                };
+                parts.push(part);
+                if parts.len() == *count {
+                    galaxy_files = true;
+                    let (path, _, parts) = open.take().expect("open file");
+                    let size = parts.iter().map(|p| p.size).sum();
+                    add(path.replace('\\', "/"), size, Source::Parts(parts));
+                }
+                continue;
+            }
+            // Only files installed below {app}; {tmp}, {commonappdata} etc. are installer glue.
+            let Some(rel) = strip_app(&f.dest) else {
+                continue;
+            };
+            plain.push((rel.replace('\\', "/"), d.file_size, f.location as usize));
+        }
+        if let Some((p, n, parts)) = open {
+            return format_err(format!("{p}: {} of {n} parts", parts.len()));
+        }
+        // Next to Galaxy files, the few files Inno installs itself (GOG client extras) go to
+        // app/, as innoextract puts them, so they do not replace a Galaxy file of the same name.
+        let prefix = if galaxy_files { "app/" } else { "" };
+        for (path, size, loc) in plain {
+            add(format!("{prefix}{path}"), size, Source::Data(loc));
         }
 
+        if data_offset != 0 && !slices.is_empty() {
+            return format_err("slices given for an installer with embedded data");
+        }
         Ok(Installer {
             file,
             data_offset,
+            slices: slices.into_iter().map(Some).collect(),
+            slices_per_disk: counts.slices_per_disk.max(1),
             info: SetupInfo {
                 compression,
                 ..info
@@ -282,34 +426,61 @@ impl Installer {
     fn extract_chunk(
         &mut self,
         chunk_offset: u32,
-        wanted: &[(usize, Vec<usize>)], // (data entry, entry indices)
+        wanted: &[(usize, Vec<String>)], // (data entry, destinations)
         sink: &mut dyn Sink,
     ) -> Result<()> {
         let first = &self.data[wanted[0].0];
-        if first.first_slice != 0 {
-            return Err(Error::Unsupported("multi-slice installer".into()));
-        }
         if first.flags & DATA_FLAG_ENCRYPTED != 0 {
             return Err(Error::Unsupported("encrypted installer".into()));
         }
         let compressed = first.flags & DATA_FLAG_COMPRESSED != 0;
         let chunk_size = first.chunk_size;
-        let start = self.data_offset + u64::from(chunk_offset);
+        let (first_slice, last_slice) = (first.first_slice, first.last_slice);
+        let (file, start): (&mut dyn ReadSeek, u64) = if self.data_offset != 0 {
+            if first_slice != 0 || last_slice != 0 {
+                return format_err("embedded data entry in a slice other than the first");
+            }
+            (&mut *self.file, self.data_offset + u64::from(chunk_offset))
+        } else {
+            if last_slice != first_slice {
+                return Err(Error::Unsupported(
+                    "a chunk that spans two slice files".into(),
+                ));
+            }
+            let f = self
+                .slices
+                .get_mut(first_slice as usize)
+                .and_then(Option::as_mut)
+                .ok_or_else(|| {
+                    Error::Format(format!(
+                        "slice file {} of the installer is missing",
+                        slice_name("setup", first_slice, self.slices_per_disk)
+                            .trim_start_matches("setup")
+                    ))
+                })?;
+            let mut head = [0u8; 12];
+            f.seek(SeekFrom::Start(0))?;
+            f.read_exact(&mut head)?;
+            if &head[..8] != SLICE_MAGIC {
+                return format_err(format!("slice {first_slice}: no slice header"));
+            }
+            (&mut **f, u64::from(chunk_offset))
+        };
 
         let mut magic = [0u8; 4];
-        self.file.seek(SeekFrom::Start(start))?;
-        self.file.read_exact(&mut magic)?;
+        file.seek(SeekFrom::Start(start))?;
+        file.read_exact(&mut magic)?;
         if &magic != CHUNK_MAGIC {
             return format_err(format!("no chunk magic at {start:#x}"));
         }
 
         let mut targets = Vec::new();
-        for (d, idx) in wanted {
+        for (d, dests) in wanted {
             let de = &self.data[*d];
             let mut paths = Vec::new();
-            for &i in idx {
-                crate::safe_relative(&self.entries[i].path)?;
-                paths.push(self.entries[i].path.clone());
+            for p in dests {
+                crate::safe_relative(p)?;
+                paths.push(p.clone());
             }
             let filtered = de.flags & DATA_FLAG_CALL_FILTER != 0;
             targets.push(Target {
@@ -329,7 +500,7 @@ impl Installer {
         targets.sort_by_key(|t| t.start);
         let needed = targets.iter().map(|t| t.end).max().unwrap_or(0);
 
-        let input = SubReader::new(&mut self.file, start + 4, chunk_size);
+        let input = SubReader::new(file, start + 4, chunk_size);
         let mut router = Router {
             pos: 0,
             targets,
@@ -373,6 +544,179 @@ impl Installer {
     }
 }
 
+impl Installer {
+    /// The stored bytes of data entry `d` (SHA-1 checked).
+    fn stored(&mut self, d: usize) -> Result<Vec<u8>> {
+        let mut mem = MemSink(Vec::new());
+        let chunk = self.data[d].chunk_offset;
+        self.extract_chunk(chunk, &[(d, vec!["part".into()])], &mut mem)?;
+        Ok(mem.0)
+    }
+
+    /// Put a Galaxy file together from its parts, part by part into the sink.
+    fn extract_parts(&mut self, i: usize, sink: &mut dyn Sink) -> Result<()> {
+        let Source::Parts(parts) = self.location[i].clone() else {
+            return Ok(());
+        };
+        let path = self.entries[i].path.clone();
+        crate::safe_relative(&path)?;
+        sink.begin(&path, self.entries[i].size)?;
+        for part in parts {
+            let stored = self.stored(part.data)?;
+            let mut got = Vec::with_capacity(part.size as usize);
+            flate2::read::ZlibDecoder::new(&stored[..])
+                .take(part.size + 1)
+                .read_to_end(&mut got)
+                .map_err(|e| Error::Format(format!("{path}: part: {e}")))?;
+            if got.len() as u64 != part.size {
+                return Err(Error::Checksum(format!(
+                    "{path}: a part of {} bytes, {} expected",
+                    got.len(),
+                    part.size
+                )));
+            }
+            sink.write(&got)?;
+        }
+        sink.end()
+    }
+}
+
+/// Collects one file in memory.
+struct MemSink(Vec<u8>);
+
+impl Sink for MemSink {
+    fn dir(&mut self, _: &str) -> Result<()> {
+        Ok(())
+    }
+    fn begin(&mut self, _: &str, size: u64) -> Result<()> {
+        self.0 = Vec::with_capacity(size as usize);
+        Ok(())
+    }
+    fn write(&mut self, data: &[u8]) -> Result<()> {
+        self.0.extend_from_slice(data);
+        Ok(())
+    }
+    fn end(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+/// The `setRegistry` actions of a GOG script (JSON) as registry entries.
+fn gog_script_registry(json: &[u8]) -> Vec<RegistryEntry> {
+    let text = String::from_utf8_lossy(json);
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}'))
+    else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for a in v["actions"].as_array().into_iter().flatten() {
+        let install = &a["install"];
+        if install["action"] != "setRegistry" || a.get("os").is_some() {
+            continue;
+        }
+        let args = &install["arguments"];
+        let root = match args["root"].as_str() {
+            Some("HKEY_LOCAL_MACHINE") => "HKLM",
+            Some("HKEY_CURRENT_USER") => "HKCU",
+            Some("HKEY_CLASSES_ROOT") => "HKCR",
+            Some("HKEY_USERS") => "HKU",
+            _ => continue,
+        };
+        let Some(key) = args["subkey"].as_str() else {
+            continue;
+        };
+        // Uninstall information and program paths are not the game's concern.
+        if key.contains("\\CurrentVersion\\") {
+            continue;
+        }
+        let kind = match args["valueType"].as_str() {
+            None if args.get("valueName").is_none() => RegistryValue::None,
+            Some("string") => RegistryValue::String,
+            Some("expandString") => RegistryValue::ExpandString,
+            Some("dword") => RegistryValue::Dword,
+            Some("qword") => RegistryValue::Qword,
+            Some("binary") => RegistryValue::Binary,
+            Some("multiString") => RegistryValue::MultiString,
+            _ => continue,
+        };
+        out.push(RegistryEntry {
+            root,
+            key: key.to_string(),
+            name: args["valueName"].as_str().unwrap_or("").to_string(),
+            kind,
+            value: args["valueData"].as_str().unwrap_or("").to_string(),
+            has_check: false,
+            deletes: false,
+        });
+    }
+    out
+}
+
+/// The quoted and bare arguments of a script call `name(a, 'b', …)` in a condition (Pascal
+/// strings: `''` is a quote).
+fn script_call(cond: &str, name: &str) -> Option<Vec<String>> {
+    let rest = cond
+        .trim()
+        .strip_prefix(name)?
+        .trim_start()
+        .strip_prefix('(')?;
+    let inner = rest.trim_end().strip_suffix(')')?;
+    let mut args = Vec::new();
+    let mut s = inner;
+    loop {
+        s = s.trim_start();
+        if let Some(mut q) = s.strip_prefix('\'') {
+            let mut arg = String::new();
+            loop {
+                let end = q.find('\'')?;
+                arg.push_str(&q[..end]);
+                q = &q[end + 1..];
+                match q.strip_prefix('\'') {
+                    Some(r) => {
+                        arg.push('\'');
+                        q = r;
+                    }
+                    None => break,
+                }
+            }
+            args.push(arg);
+            s = q;
+        } else {
+            let end = s.find(',').unwrap_or(s.len());
+            args.push(s[..end].trim().to_string());
+            s = &s[end..];
+        }
+        s = s.trim_start();
+        match s.strip_prefix(',') {
+            Some(r) => s = r,
+            None if s.is_empty() => return Some(args),
+            None => return None,
+        }
+    }
+}
+
+/// `after_install('<md5>', <stored>, <size>)` → the part (data entry filled in later).
+fn galaxy_part(after: &str) -> Option<Part> {
+    let a = script_call(after, "after_install")
+        .or_else(|| script_call(after, "after_install_dependency"))?;
+    let size: u64 = a.get(2)?.parse().ok()?;
+    Some(Part { data: 0, size })
+}
+
+fn galaxy_stored(after: &str) -> Option<u64> {
+    let a = script_call(after, "after_install")
+        .or_else(|| script_call(after, "after_install_dependency"))?;
+    a.get(1)?.parse().ok()
+}
+
+/// `before_install('<md5>', '<path>', <parts>)` → (path, parts).
+fn galaxy_file(before: &str) -> Option<(String, usize)> {
+    let a = script_call(before, "before_install")
+        .or_else(|| script_call(before, "before_install_dependency"))?;
+    let count: usize = a.get(2)?.parse().ok()?;
+    (count > 0 && !a.get(1)?.is_empty()).then(|| (a[1].clone(), count))
+}
+
 impl Archive for Installer {
     fn registry(&self) -> &[RegistryEntry] {
         &self.registry
@@ -401,24 +745,30 @@ impl Archive for Installer {
         }
         // Group the selected entries by chunk, then by data entry, so each chunk is
         // decompressed once and identical data is written to all its destinations.
-        let mut by_chunk: BTreeMap<u32, BTreeMap<usize, Vec<usize>>> = BTreeMap::new();
+        let mut by_chunk: BTreeMap<u32, BTreeMap<usize, Vec<String>>> = BTreeMap::new();
+        let mut galaxy = Vec::new();
         let mut n = 0;
         for (i, e) in self.entries.iter().enumerate() {
             if !select(e) {
                 continue;
             }
-            let d = self.location[i];
-            by_chunk
-                .entry(self.data[d].chunk_offset)
-                .or_default()
-                .entry(d)
-                .or_default()
-                .push(i);
+            match &self.location[i] {
+                Source::Data(d) => by_chunk
+                    .entry(self.data[*d].chunk_offset)
+                    .or_default()
+                    .entry(*d)
+                    .or_default()
+                    .push(e.path.clone()),
+                Source::Parts(_) => galaxy.push(i),
+            }
             n += 1;
         }
         for (chunk, files) in by_chunk {
-            let wanted: Vec<(usize, Vec<usize>)> = files.into_iter().collect();
+            let wanted: Vec<(usize, Vec<String>)> = files.into_iter().collect();
             self.extract_chunk(chunk, &wanted, sink)?;
+        }
+        for i in galaxy {
+            self.extract_parts(i, sink)?;
         }
         Ok(n)
     }
@@ -600,6 +950,17 @@ fn filter_calls(buf: &mut [u8]) {
     }
 }
 
+/// The file name of slice `i` (0-based) after the installer's stem: `stem-1.bin`, or with
+/// several slices per disk `stem-1a.bin`, `stem-1b.bin`, ….
+fn slice_name(stem: &str, i: u32, per_disk: u32) -> String {
+    if per_disk <= 1 {
+        format!("{stem}-{}.bin", i + 1)
+    } else {
+        let letter = char::from(b'a' + (i % per_disk) as u8);
+        format!("{stem}-{}{letter}.bin", i / per_disk + 1)
+    }
+}
+
 /// `{app}\rest` → `rest` (case-insensitive), anything else → None.
 fn strip_app(dest: &str) -> Option<&str> {
     let head = dest.get(..6)?;
@@ -669,20 +1030,22 @@ fn read_block(r: &mut impl Read) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-fn parse_header(p: &mut P<'_>) -> Result<(SetupInfo, Counts, u8)> {
+fn parse_header(p: &mut P<'_>, ver: Version) -> Result<(SetupInfo, Counts, u8)> {
     let app_name = p.wstr()?;
     p.skip_strings(8)?; // versioned name, id, copyright, publisher, url, phone, support, updates
     let app_version = p.wstr()?;
     // default dir, group, base filename, uninstall files dir, name, icon, mutex,
     // default user/organisation/serial, readme, contact, comments, modify path,
     // create uninstall key, uninstallable, close applications filter,
-    // license/info before/info after (ANSI), compiled code
-    p.skip_strings(21)?;
+    // (5.6: setup mutex, then changes environment and changes associations, which became
+    // expressions instead of flags), license/info before/info after (ANSI), compiled code
+    p.skip_strings(if ver >= (5, 6, 0) { 24 } else { 21 })?;
     let mut c = [0u32; 16];
     for v in &mut c {
         *v = p.u32()?;
     }
-    let counts = Counts {
+    let mut counts = Counts {
+        slices_per_disk: 1,
         language: c[0],
         message: c[1],
         permission: c[2],
@@ -697,10 +1060,16 @@ fn parse_header(p: &mut P<'_>) -> Result<(SetupInfo, Counts, u8)> {
         registry: c[11],
     };
     p.skip(WINVER_RANGE)?;
-    p.skip(4 * 3)?; // back colour, back colour 2, image back colour
+    if ver >= (5, 5, 7) {
+        // back colour, back colour 2; the image back colour gave way to the image alpha format
+        p.skip(4 * 2 + 1)?;
+    } else {
+        p.skip(4 * 3)?; // back colour, back colour 2, image back colour
+    }
     p.skip(20 + 8)?; // password SHA-1 + salt
-    p.skip(8 + 4)?; // extra disk space, slices per disk
-                    // uninstall log mode, dir exists warning, privileges, language dialog, detection
+    p.skip(8)?; // extra disk space
+    counts.slices_per_disk = p.u32()?;
+    // uninstall log mode, dir exists warning, privileges, language dialog, detection
     p.skip(5)?;
     let compression = p.u8()?;
     if compression > 4 {
@@ -757,15 +1126,24 @@ fn skip_entries(p: &mut P<'_>, c: &Counts) -> Result<Vec<String>> {
     Ok(dirs)
 }
 
-/// File entry → (destination, data entry index).
-fn parse_file_entry(p: &mut P<'_>) -> Result<(String, u32)> {
+/// A `[Files]` entry: destination, data entry index and the script conditions.
+fn parse_file_entry(p: &mut P<'_>) -> Result<FileEntry> {
     p.skip_strings(1)?; // source
     let dest = p.wstr()?;
-    p.skip_strings(2 + ITEM_CONDITIONS)?; // font name, assembly name, conditions
+    // font name, assembly name, components, tasks, languages, check (GOG: languages and
+    // systems a file is for; the first entry of a destination is kept)
+    p.skip_strings(6)?;
+    let after = p.wstr()?;
+    let before = p.wstr()?;
     p.skip(WINVER_RANGE)?;
     let location = p.u32()?;
     p.skip(4 + 8 + 2 + 4 + 1)?; // attributes, external size, permission, flags, type
-    Ok((dest, location))
+    Ok(FileEntry {
+        dest,
+        location,
+        after,
+        before,
+    })
 }
 
 /// Icons (shortcuts) and INI entries: skipped.
@@ -836,7 +1214,7 @@ fn parse_registry_entry(p: &mut P<'_>) -> Result<RegistryEntry> {
 
 fn parse_data_entry(p: &mut P<'_>) -> Result<DataEntry> {
     let first_slice = p.u32()?;
-    let _last_slice = p.u32()?;
+    let last_slice = p.u32()?;
     let chunk_offset = p.u32()?;
     let file_offset = p.u64()?;
     let file_size = p.u64()?;
@@ -846,6 +1224,7 @@ fn parse_data_entry(p: &mut P<'_>) -> Result<DataEntry> {
     let flags = p.u16()?;
     Ok(DataEntry {
         first_slice,
+        last_slice,
         chunk_offset,
         file_offset,
         file_size,
@@ -897,6 +1276,67 @@ mod tests {
         let mut b = [0xe8, 0xf5, 0xff, 0xff, 0x00, 0x90];
         unfilter_calls(&mut b);
         assert_eq!(b, [0xe8, 0xf0, 0xff, 0xff, 0xff, 0x90]);
+    }
+
+    #[test]
+    fn gog_script_actions() {
+        let json = br#"{"actions": [
+            {"install": {"action": "setRegistry", "arguments": {"root": "HKEY_LOCAL_MACHINE",
+              "subkey": "Software\\X\\1.0", "valueData": "{app}", "valueName": "AppPath",
+              "valueType": "string"}}, "languages": ["*"]},
+            {"install": {"action": "setRegistry", "arguments": {"root": "HKEY_CURRENT_USER",
+              "subkey": "Software\\X", "valueData": "$00000001", "valueName": "full_screen",
+              "valueType": "dword"}}, "os": ["win10"]},
+            {"install": {"action": "setRegistry", "arguments": {"root": "HKEY_LOCAL_MACHINE",
+              "subkey": "Software\\X"}}},
+            {"install": {"action": "savePath", "arguments": {}}}
+        ]}"#;
+        let r = gog_script_registry(json);
+        assert_eq!(r.len(), 2);
+        assert_eq!((r[0].root, r[0].key.as_str()), ("HKLM", "Software\\X\\1.0"));
+        assert_eq!(
+            (r[0].name.as_str(), r[0].value.as_str()),
+            ("AppPath", "{app}")
+        );
+        assert_eq!(r[0].kind, RegistryValue::String);
+        assert_eq!(r[1].kind, RegistryValue::None);
+    }
+
+    #[test]
+    fn galaxy_conditions() {
+        let p = galaxy_part("after_install('69009fff6ddf9e4a788e539c5d62281a', 117225, 261120)")
+            .unwrap();
+        assert_eq!(p.size, 261120);
+        assert_eq!(galaxy_stored("after_install('x', 5, 6)"), Some(5));
+        assert_eq!(
+            galaxy_file("before_install('cb65', 'Data\\music.h4r', 7)"),
+            Some(("Data\\music.h4r".into(), 7))
+        );
+        assert_eq!(
+            galaxy_file("before_install_dependency('14af', '__redist\\ISI\\s.exe', 1)"),
+            Some(("__redist\\ISI\\s.exe".into(), 1))
+        );
+        assert_eq!(galaxy_file(""), None);
+        assert_eq!(
+            script_call("check_if_install('de-DE#','32#64#','')", "check_if_install"),
+            Some(vec!["de-DE#".to_string(), "32#64#".into(), String::new()])
+        );
+        assert_eq!(
+            script_call("f(1, 'a,b' , x)", "f"),
+            Some(vec!["1".into(), "a,b".into(), "x".into()])
+        );
+        assert_eq!(
+            galaxy_file("before_install('73c0', 'maps\\The Dragon''s Wrath.h4c', 1)"),
+            Some(("maps\\The Dragon's Wrath.h4c".into(), 1))
+        );
+    }
+
+    #[test]
+    fn slice_names() {
+        assert_eq!(slice_name("setup_x", 0, 1), "setup_x-1.bin");
+        assert_eq!(slice_name("setup_x", 1, 1), "setup_x-2.bin");
+        assert_eq!(slice_name("s", 0, 2), "s-1a.bin");
+        assert_eq!(slice_name("s", 3, 2), "s-2b.bin");
     }
 
     #[test]

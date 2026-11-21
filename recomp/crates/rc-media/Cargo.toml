@@ -12,6 +12,7 @@ publish.workspace = true
 crc32fast = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 sha1 = "0.10"
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
