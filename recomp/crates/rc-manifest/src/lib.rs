@@ -41,8 +41,12 @@ pub struct Game {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Engine {
+    /// Cultures 1 (CulturesRecomp).
     C1,
+    /// The Cultures 2 engine (CulturesRecomp).
     C2,
+    /// Heroes of Might and Magic IV.
+    H4,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -71,6 +75,9 @@ pub struct Media {
 pub enum MediaKind {
     /// Inno Setup installer (GOG).
     Inno,
+    /// An external data slice of the Inno Setup installer in the same variant
+    /// (`setup_….exe` keeps the headers, `setup_…-1.bin` the file data).
+    Slice,
     /// ISO 9660 CD image.
     Iso,
     /// Zip archive of an installed copy (the original directory layout, uncompressed or deflated).
@@ -533,7 +540,13 @@ pub fn default_games_dir() -> PathBuf {
     if let Ok(cwd) = std::env::current_dir() {
         for dir in cwd.ancestors() {
             let g = dir.join("games");
-            if g.join("cultures1").join("game.toml").is_file() {
+            let has_manifest = std::fs::read_dir(&g)
+                .map(|d| {
+                    d.filter_map(Result::ok)
+                        .any(|e| e.path().join("game.toml").is_file())
+                })
+                .unwrap_or(false);
+            if has_manifest {
                 return g;
             }
         }
@@ -553,41 +566,46 @@ mod tests {
     fn all_manifests_are_consistent() {
         let ms = load_dir(&repo_games()).unwrap_or_else(|e| panic!("{e}"));
         let ids: Vec<_> = ms.iter().map(|m| m.game.id.as_str()).collect();
-        assert_eq!(
-            ids,
-            [
-                "cultures1",
-                "cultures2",
-                "eighthwonder",
-                "northland",
-                "saga"
-            ]
-        );
+        assert_eq!(ids, ["heroes4"]);
         let c = Catalog::new(&ms);
-        // 12 media files, 9 distinct single-player executables (main + alternate).
-        let media = ms.iter().flat_map(|m| &m.variants).count();
-        assert_eq!(media, 12);
+        // One variant: the installer and its data slice; one main executable.
+        let variants = ms.iter().flat_map(|m| &m.variants).count();
+        assert_eq!(variants, 1);
+        let media = ms
+            .iter()
+            .flat_map(|m| &m.variants)
+            .flat_map(|v| &v.media)
+            .count();
+        assert_eq!(media, 2);
         let mains: BTreeSet<_> = ms
             .iter()
             .flat_map(|m| &m.binaries)
             .filter(|b| matches!(b.role, Role::Main | Role::Alternate))
             .map(|b| b.sha256.as_str())
             .collect();
-        assert_eq!(mains.len(), 9);
+        assert_eq!(mains.len(), 1);
         assert!(!c.is_empty());
     }
 
     #[test]
-    fn shared_dll_hits_every_game() {
+    fn installer_slice_and_miles_are_known() {
         let ms = load_dir(&repo_games()).unwrap();
         let c = Catalog::new(&ms);
-        let hits = c.lookup("547c5571c39dbcb921a2b8fff2d1568f11ceab9b79a7a2d5a2a82fb5601395bf");
+        let slice = c.lookup("f2a371b683d1af3ec1c8b7605deee168b18859b842f8b888b396900d891fadbb");
+        assert!(matches!(
+            slice,
+            [Hit::Media {
+                kind: MediaKind::Slice,
+                ..
+            }]
+        ));
+        let mss = c.lookup("2a515199cc7a2e1ccd8d756efdaab07cedd5c3052309ef1c7499c2560e2097bd");
         assert_eq!(
-            hits.len(),
-            4,
-            "gedx8musicdrv.dll is shared by all four C2-engine games"
+            mss.len(),
+            1,
+            "Mss32.dll (6.1c), the build CulturesRecomp replaces too"
         );
-        assert!(c.is_known_size(77824));
+        assert!(c.is_known_size(348160));
         assert!(c.lookup(&"0".repeat(64)).is_empty());
     }
 

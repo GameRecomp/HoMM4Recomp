@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MIT
+# Manifest for Heroes of Might and Magic IV. Human-readable overview: docs/TARGETS.md
+schema = 1
+
+[game]
+id = "heroes4"
+title = "Heroes of Might and Magic IV"
+title_de = "Heroes of Might and Magic IV"
+engine = "h4"
+gog_id = "1207658915"
+
+[[variant]]
+id = "gog-de"
+store = "gog"
+language = "de"
+content = ["base", "gathering-storm", "winds-of-war"]
+notes = "GOG \"Complete\" 3.0 (build 25023). Inno Setup 5.6.2 (u), file data in one external slice."
+media = [
+  { file = "setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023).exe", kind = "inno", size = 807112, sha256 = "9609dd49f48a3fb325e9383053a1607e59e247db3f9ab8df484113b16dcff4bf" },
+  { file = "setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023)-1.bin", kind = "slice", size = 1054210930, sha256 = "f2a371b683d1af3ec1c8b7605deee168b18859b842f8b888b396900d891fadbb" },
+]
+
+# --- executables -------------------------------------------------------------
+
+[[binary]]
+name = "Heroes4.exe"
+role = "main"
+treatment = "lift"
+size = 7877375
+sha256 = "b6debc1c20065cdcef9524c856d1dba793d34368c786ba9c42eed7fa70a54a3b"
+variants = ["gog-de"]
+
+[[binary]]
+name = "campaign_editor.exe"
+role = "editor"
+treatment = "ignore"
+size = 4513792
+sha256 = "5deed9f176cc039c2465bceb4f6b84fa3d023848831834987d545284a2ced56f"
+variants = ["gog-de"]
+notes = "MFC campaign editor; lifted from M11 on (each lifted executable adds hundreds of MB of C)."
+
+# --- libraries -----------------------------------------------------------------
+
+[[binary]]
+name = "binkw32.dll"
+role = "library"
+treatment = "lift"
+size = 261120
+sha256 = "545f402be018bc905c03305322072e194d77b1a5ec20b62c34cdbc4c81c961fa"
+variants = ["gog-de"]
+
+[[binary]]
+name = "Mss32.dll"
+role = "library"
+treatment = "hle"
+size = 348160
+sha256 = "2a515199cc7a2e1ccd8d756efdaab07cedd5c3052309ef1c7499c2560e2097bd"
+variants = ["gog-de"]
+notes = "Miles Sound System 6.1c; the game uses it only to find and call the MP3 codec (RIB)."
+
+[[binary]]
+name = "Mp3dec.asi"
+role = "library"
+treatment = "lift"
+size = 125952
+sha256 = "0a6db88a5fad28168c1dac700473c5709b17802c33e36b2668c3300c1e580fad"
+variants = ["gog-de"]
+notes = "Miles' MP3 decoder provider, loaded through RIB (M6)."
