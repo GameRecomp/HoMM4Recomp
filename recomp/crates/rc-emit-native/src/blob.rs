@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use crate::{CallKind, Compiled, Error, Target, layout};
 
 pub const MAGIC: &[u8; 8] = b"RCNATIVE";
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 const FUNC_ALIGN: usize = 16;
 
 fn put(out: &mut Vec<u8>, v: u32) {

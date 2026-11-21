@@ -15,7 +15,7 @@
 //! | `env.memory` | the runtime's linear memory; guest memory is a region of it at `c->mem` |
 //! | `env.table` | the runtime's function table; the module's functions go to `env.table_base` on |
 //! | `env.table_base` | the first table slot the page grew the table by for this module |
-//! | `rc.dispatch`, `rc.trap`, `rc.cpuid`, `rc.rdtsc`, `rc.fpu`, `rc.fstsw`, `rc.point`, `rc.mmx` | the runtime functions native code reaches through `c->helpers` (runtime/src/native.c), with the same arguments |
+//! | `rc.dispatch`, `rc.trap`, `rc.cpuid`, `rc.rdtsc`, `rc.fpu`, `rc.fstsw`, `rc.point`, `rc.mmx`, `rc.dispatch_jump`, `rc.unwind_claim`, `rc.unwind_begin` | the runtime functions native code reaches through `c->helpers` (runtime/src/native.c), with the same arguments |
 //!
 //! Calls between lifted functions are direct `call`s. A function pointer of
 //! the runtime is a table slot, so the runtime calls lifted function `i` (in
@@ -60,6 +60,11 @@ pub mod layout {
     pub const HELPERS: u64 = 124;
     /// The MMX registers, `uint64_t mm[8]`, after `helpers` (8-aligned under wasm32).
     pub const MM: u64 = 128;
+    /// Exception unwinding: `unwind`, `unwind_eip`, `unwind_ebp`, `eh_depth`, `eh_esp`,
+    /// `resume_eip` (uint32_t each), after the MMX registers.
+    pub const UNWIND: u64 = MM + 64;
+    pub const EH_DEPTH: u64 = UNWIND + 12;
+    pub const RESUME_EIP: u64 = UNWIND + 20;
 }
 
 /// What a trap reports (the `kind` argument of `rc.trap`), as in
@@ -119,7 +124,14 @@ const F_POINT: u32 = 6;
 /// `rc.mmx(c, op, a, b) -> i64`: one MMX operation (`op`: the `rc_ir::MmxOp` in declaration
 /// order, as rc/mmx.h's RC_MMX_OPS lists them).
 const F_MMX: u32 = 7;
-const IMPORTED_FUNCS: u32 = 8;
+/// `rc.dispatch_jump(c, target)`: an indirect jump (rc_dispatch_jump).
+const F_DISPATCH_JUMP: u32 = 8;
+/// `rc.unwind_claim(c, ebp, lo, hi) -> i32`: rc_unwind_claim for one range, non-zero if
+/// this frame took the continuation over.
+const F_UNWIND_CLAIM: u32 = 9;
+/// `rc.unwind_begin(c, eip)`: rc_unwind_begin.
+const F_UNWIND_BEGIN: u32 = 10;
+const IMPORTED_FUNCS: u32 = 11;
 
 // Types.
 const T_LIFTED: u32 = 0; // (i32) -> ()
@@ -128,6 +140,7 @@ const T_TRAP: u32 = 2; // (i32, i32, i32, i32) -> ()
 const T_FPU: u32 = 3; // (i32, i32, i32) -> ()
 const T_FSTSW: u32 = 4; // (i32) -> (i32)
 const T_MMX: u32 = 5; // (i32, i32, i64, i64) -> (i64)
+const T_CLAIM: u32 = 6; // (i32, i32, i32, i32) -> (i32)
 
 /// Compiles functions of one program. `functions` are the addresses of all
 /// lifted functions (they are numbered in address order); calls to
@@ -185,6 +198,7 @@ pub fn link(funcs: &[Compiled], modules: &[String]) -> Result<Vec<u8>, Error> {
     types
         .ty()
         .function([i, i, ValType::I64, ValType::I64], [ValType::I64]);
+    types.ty().function([i, i, i, i], [i]);
     module.section(&types);
 
     let mut imports = ImportSection::new();
@@ -196,6 +210,9 @@ pub fn link(funcs: &[Compiled], modules: &[String]) -> Result<Vec<u8>, Error> {
     imports.import("rc", "fstsw", EntityType::Function(T_FSTSW));
     imports.import("rc", "point", EntityType::Function(T_DISPATCH));
     imports.import("rc", "mmx", EntityType::Function(T_MMX));
+    imports.import("rc", "dispatch_jump", EntityType::Function(T_DISPATCH));
+    imports.import("rc", "unwind_claim", EntityType::Function(T_CLAIM));
+    imports.import("rc", "unwind_begin", EntityType::Function(T_DISPATCH));
     imports.import(
         "env",
         "memory",
@@ -303,7 +320,7 @@ fn tables(order: &[&Compiled], modules: &[String]) -> Result<Vec<u8>, Error> {
     let header = 48;
     let mut out = Vec::with_capacity(header + t.len());
     out.extend_from_slice(b"RCNATIVE");
-    put(&mut out, 1);
+    put(&mut out, 2);
     put(&mut out, TARGET_ID);
     put(&mut out, layout::MEM as u32);
     put(&mut out, layout::HELPERS as u32);
@@ -448,6 +465,65 @@ impl<'a> Emitter<'a> {
     }
 
     // ---- state in `c` ----
+
+    /// After a call: while an exception unwinds, return, after letting this frame take the
+    /// continuation over if it is the one (as the other back ends).
+    fn unwind_check(&mut self) {
+        let f = self.f;
+        let lo = f.insns.iter().map(|i| i.addr).min().unwrap_or(f.addr);
+        let hi = f
+            .insns
+            .iter()
+            .map(|i| i.addr + u32::from(i.len))
+            .max()
+            .unwrap_or(f.addr);
+        let mut ranges = vec![(lo, hi)];
+        ranges.extend(f.continuations.iter().map(|&c| (c, c + 1)));
+        self.i()
+            .local_get(L_C)
+            .i32_load(mem(layout::UNWIND, 2))
+            .if_(BlockType::Empty);
+        for (lo, hi) in ranges {
+            self.i()
+                .local_get(L_C)
+                .local_get(L_REG + 5)
+                .i32_const(lo as i32)
+                .i32_const(hi as i32)
+                .call(F_UNWIND_CLAIM)
+                .if_(BlockType::Empty)
+                .return_()
+                .end();
+        }
+        self.i().return_().end();
+    }
+
+    /// An __except block: entered during an exception it starts the unwinding to its frame;
+    /// entered by that frame (resume_eip) it runs.
+    fn except_prologue(&mut self) {
+        let a = self.f.addr as i32;
+        self.i()
+            .local_get(L_C)
+            .i32_load(mem(layout::RESUME_EIP, 2))
+            .i32_const(a)
+            .i32_eq()
+            .if_(BlockType::Empty)
+            .local_get(L_C)
+            .i32_const(0)
+            .i32_store(mem(layout::RESUME_EIP, 2))
+            .else_()
+            .local_get(L_C)
+            .i32_load(mem(layout::EH_DEPTH, 2))
+            .if_(BlockType::Empty)
+            .local_get(L_C)
+            .local_get(L_REG + 5)
+            .i32_store(mem(layout::R + 4 * 5, 2))
+            .local_get(L_C)
+            .i32_const(a)
+            .call(F_UNWIND_BEGIN)
+            .return_()
+            .end()
+            .end();
+    }
 
     fn load_state(&mut self, flags: bool) {
         for k in 0..8u32 {
@@ -1272,6 +1348,9 @@ impl<'a> Emitter<'a> {
             .i32_load(mem(layout::MEM, 2))
             .local_set(L_M);
         self.load_state(true);
+        if f.except_block {
+            self.except_prologue();
+        }
         let entry_case = self.cases[&entry];
         if entry_case != 0 {
             self.i().i32_const(entry_case as i32).local_set(L_PC);
@@ -1318,6 +1397,7 @@ impl<'a> Emitter<'a> {
                         self.push_ret(*ret);
                         self.spill(false);
                         self.i().local_get(L_C).call(fi);
+                        self.unwind_check();
                         self.load_state(self.cx.opts.flags_at_return);
                     } else {
                         self.trap(ins.addr, trap::CALL, *target);
@@ -1332,6 +1412,7 @@ impl<'a> Emitter<'a> {
                     self.spill(false);
                     self.i().local_get(L_C).local_get(t).call(F_DISPATCH);
                     self.release(t, W::B32);
+                    self.unwind_check();
                     self.load_state(self.cx.opts.flags_at_return);
                     self.fall(next, next_emitted, ins.addr)?;
                 }
@@ -1353,7 +1434,7 @@ impl<'a> Emitter<'a> {
                     self.i()
                         .local_get(L_C)
                         .local_get(s)
-                        .call(F_DISPATCH)
+                        .call(F_DISPATCH_JUMP)
                         .return_();
                     self.release(s, W::B32);
                 }

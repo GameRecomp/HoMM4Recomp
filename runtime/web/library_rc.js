@@ -181,7 +181,8 @@ addToLibrary({
     const helpers = _rc_wasm_helpers();
     const h = (i) => table.get(HEAPU32[(helpers >> 2) + i]);
     await WebAssembly.instantiate(mod, {
-      rc: { dispatch: h(0), trap: h(1), cpuid: h(2), rdtsc: h(3), fpu: h(4), fstsw: h(5), point: h(6), mmx: h(7) },
+      rc: { dispatch: h(0), trap: h(1), cpuid: h(2), rdtsc: h(3), fpu: h(4), fstsw: h(5), point: h(6), mmx: h(7),
+            dispatch_jump: h(8), unwind_claim: h(9), unwind_begin: h(10) },
       env: {
         memory: wasmMemory,
         table,

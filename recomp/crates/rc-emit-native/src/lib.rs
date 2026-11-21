@@ -52,6 +52,11 @@ pub mod layout {
     pub const HELPERS: i32 = 128;
     /// The MMX registers, `uint64_t mm[8]`, after `helpers` (64-bit hosts).
     pub const MM: i32 = 136;
+    /// Exception unwinding: `unwind`, then `unwind_eip`, `unwind_ebp`, `eh_depth`, `eh_esp`,
+    /// `resume_eip` (uint32_t each), after the MMX registers.
+    pub const UNWIND: i32 = MM + 64;
+    pub const EH_DEPTH: i32 = UNWIND + 12;
+    pub const RESUME_EIP: i32 = UNWIND + 20;
 }
 
 /// The runtime functions native code calls, by their index in
@@ -74,6 +79,13 @@ mod helper {
     /// `uint64_t (rc_cpu *c, uint32_t op, uint64_t a, uint64_t b)`: one MMX operation
     /// (`op`: the `rc_ir::MmxOp` in declaration order, as rc/mmx.h's RC_MMX_OPS lists them).
     pub const MMX: i32 = 7;
+    /// `void (rc_cpu *c, uint32_t target)`: an indirect jump (rc_dispatch_jump).
+    pub const DISPATCH_JUMP: i32 = 8;
+    /// `uint32_t (rc_cpu *c, uint32_t ebp, uint32_t lo, uint32_t hi)`: rc_unwind_claim for
+    /// one range; non-zero if this frame took the continuation over.
+    pub const UNWIND_CLAIM: i32 = 9;
+    /// `void (rc_cpu *c, uint32_t eip)`: rc_unwind_begin.
+    pub const UNWIND_BEGIN: i32 = 10;
 }
 
 /// What a trap reports (the `kind` argument of the trap helper).
@@ -449,6 +461,73 @@ impl<'a, 'b> Emitter<'a, 'b> {
                 self.b.ins().store(t, v, self.c, layout::FLAGS + i as i32);
             }
         }
+    }
+
+    // ---- exceptions (as the C back end: rc/lifted.h) ----
+
+    /// After a call: while an exception unwinds, return, after letting this frame take the
+    /// continuation over if it is the one (its ebp before the call; its code or one of its
+    /// continuations).
+    fn unwind_check(&mut self) {
+        let t = MemFlagsData::trusted();
+        let u = self.b.ins().load(types::I32, t, self.c, layout::UNWIND);
+        let unwinding = self.b.create_block();
+        let go_on = self.b.create_block();
+        self.b.ins().brif(u, unwinding, &[], go_on, &[]);
+        self.b.switch_to_block(unwinding);
+        let ebp = self.b.use_var(self.regs[5]);
+        let lo = self.f.insns.iter().map(|i| i.addr).min().unwrap_or(self.f.addr);
+        let hi = self
+            .f
+            .insns
+            .iter()
+            .map(|i| i.addr + u32::from(i.len))
+            .max()
+            .unwrap_or(self.f.addr);
+        let mut ranges = vec![(lo, hi)];
+        ranges.extend(self.f.continuations.iter().map(|&c| (c, c + 1)));
+        let done = self.b.create_block();
+        for (lo, hi) in ranges {
+            let lo = self.b.ins().iconst(types::I32, i64::from(lo as i32));
+            let hi = self.b.ins().iconst(types::I32, i64::from(hi as i32));
+            let r = self
+                .helper(helper::UNWIND_CLAIM, &[ebp, lo, hi], true)
+                .expect("result");
+            let next = self.b.create_block();
+            self.b.ins().brif(r, done, &[], next, &[]);
+            self.b.switch_to_block(next);
+        }
+        self.b.ins().jump(done, &[]);
+        self.b.switch_to_block(done);
+        self.b.ins().return_(&[]);
+        self.b.switch_to_block(go_on);
+    }
+
+    /// An __except block: entered during an exception (called by __except_handler3), it starts
+    /// the unwinding to its frame; entered by that frame (resume_eip), it runs.
+    fn except_prologue(&mut self) {
+        let t = MemFlagsData::trusted();
+        let addr = self.b.ins().iconst(types::I32, i64::from(self.f.addr as i32));
+        let resume = self.b.ins().load(types::I32, t, self.c, layout::RESUME_EIP);
+        let is_resume = self.b.ins().icmp(IntCC::Equal, resume, addr);
+        let resumed = self.b.create_block();
+        let other = self.b.create_block();
+        let run = self.b.create_block();
+        self.b.ins().brif(is_resume, resumed, &[], other, &[]);
+        self.b.switch_to_block(resumed);
+        let zero = self.b.ins().iconst(types::I32, 0);
+        self.b.ins().store(t, zero, self.c, layout::RESUME_EIP);
+        self.b.ins().jump(run, &[]);
+        self.b.switch_to_block(other);
+        let depth = self.b.ins().load(types::I32, t, self.c, layout::EH_DEPTH);
+        let begin = self.b.create_block();
+        self.b.ins().brif(depth, begin, &[], run, &[]);
+        self.b.switch_to_block(begin);
+        let ebp = self.b.use_var(self.regs[5]);
+        self.b.ins().store(t, ebp, self.c, layout::R + 4 * 5);
+        self.helper(helper::UNWIND_BEGIN, &[addr], false);
+        self.b.ins().return_(&[]);
+        self.b.switch_to_block(run);
     }
 
     // ---- calls ----
@@ -957,6 +1036,9 @@ impl<'a, 'b> Emitter<'a, 'b> {
             self.blocks.insert(ins.addr, blk);
         }
         self.load_state(true);
+        if f.except_block {
+            self.except_prologue();
+        }
         // The entry, which need not be the lowest instruction: discovery gives a function the
         // shared tail it jumps back to, below its entry (as the C back end's `goto`).
         let start = if self.blocks.contains_key(&f.addr) {
@@ -1001,6 +1083,7 @@ impl<'a, 'b> Emitter<'a, 'b> {
                         let fr = self.func_ref(*target);
                         let c = self.c;
                         self.b.ins().call(fr, &[c]);
+                        self.unwind_check();
                         self.load_state(self.opts.flags_at_return);
                     } else {
                         self.trap(ins.addr, trap::CALL, *target);
@@ -1012,6 +1095,7 @@ impl<'a, 'b> Emitter<'a, 'b> {
                     self.push_ret(*ret);
                     self.spill(false);
                     self.helper(helper::DISPATCH, &[t], false);
+                    self.unwind_check();
                     self.load_state(self.opts.flags_at_return);
                     self.fall(next, next_emitted, ins.addr);
                 }
@@ -1026,7 +1110,7 @@ impl<'a, 'b> Emitter<'a, 'b> {
                 Term::JumpIndirect(t) => {
                     let t = self.exact(t, W::B32);
                     self.spill(true);
-                    self.helper(helper::DISPATCH, &[t], false);
+                    self.helper(helper::DISPATCH_JUMP, &[t], false);
                     self.b.ins().return_(&[]);
                     self.dead();
                 }

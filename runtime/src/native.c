@@ -230,9 +230,28 @@ static uint64_t h_mmx(rc_cpu *c, uint32_t op, uint64_t a, uint64_t b)
     return ops[op](a, b);
 }
 
+/* rc-emit-native's and rc-emit-wasm's layout::UNWIND, EH_DEPTH and RESUME_EIP. */
+_Static_assert(sizeof(void *) != 8 || (offsetof(rc_cpu, unwind) == 200 && offsetof(rc_cpu, eh_depth) == 212 &&
+                                       offsetof(rc_cpu, resume_eip) == 220),
+               "rc_cpu's exception fields moved: change rc-emit-native's layout");
+_Static_assert(sizeof(void *) != 4 || (offsetof(rc_cpu, unwind) == 192 && offsetof(rc_cpu, eh_depth) == 204 &&
+                                       offsetof(rc_cpu, resume_eip) == 212),
+               "rc_cpu's exception fields moved: change rc-emit-wasm's layout");
+
+static void h_dispatch_jump(rc_cpu *c, uint32_t target) { rc_dispatch_jump(c, target); }
+
+/* rc_unwind_claim for one range: whether this frame took the continuation over. */
+static uint32_t h_unwind_claim(rc_cpu *c, uint32_t ebp, uint32_t lo, uint32_t hi)
+{
+    rc_unwind_claim(c, ebp, lo, hi, 0, 0);
+    return c->unwind == 0;
+}
+
+static void h_unwind_begin(rc_cpu *c, uint32_t eip) { rc_unwind_begin(c, eip); }
+
 /* In the order of rc-emit-native's `helper` module. Function pointers are
  * stored as data pointers, which every platform this runs on allows. */
-static const void *helper_table[8];
+static const void *helper_table[11];
 
 static void init_helpers(void)
 {
@@ -251,6 +270,9 @@ static void init_helpers(void)
     SET(5, h_fstsw);
     SET(6, h_point);
     SET(7, h_mmx);
+    SET(8, h_dispatch_jump);
+    SET(9, h_unwind_claim);
+    SET(10, h_unwind_begin);
 #undef SET
 }
 
@@ -407,8 +429,9 @@ bool rc_native_open(const uint8_t *b, size_t size, rc_native_image *img, char *e
     if (size < 48 || memcmp(b, "RCNATIVE", 8) != 0) {
         FAIL("not native code from recomp");
     }
-    if (rd32(b + 8) != 1) {
-        FAIL("native code of format %u (this runtime reads 1)", rd32(b + 8));
+    /* Format 2: the helpers and CPU state for exception unwinding. */
+    if (rd32(b + 8) != 2) {
+        FAIL("native code of format %u (this runtime reads 2)", rd32(b + 8));
     }
     if (rd32(b + 12) != host_target()) {
         FAIL("native code for another machine (target %u, this is %u)", rd32(b + 12), host_target());
