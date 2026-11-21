@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MIT
+# Into the first scenario (as firstturn), then the hero walks to the wolves by the windmill;
+# automatic combat to the victory, back to the map, and the game saved from the system menu
+# over the turn's autosave. Coordinates at 1024x768.
+220 key 27
+222 keyup 27
+300 key 27
+302 keyup 27
+380 move 512 384
+382 down 1
+384 up 1
+460 key 27
+462 keyup 27
+700 move 895 142
+720 down 1
+724 up 1
+790 move 660 180
+800 down 1
+804 up 1
+1000 move 776 640
+1010 down 1
+1014 up 1
+1300 move 780 646
+1310 down 1
+1314 up 1
+# close the message
+1800 move 510 436
+1810 down 1
+1814 up 1
+# select the hero on the map and move it twice to a spot (click target, click again to go)
+1850 move 300 560
+1860 down 1
+1864 up 1
+1900 down 1
+1904 up 1
+# leave the town (the check mark)
+2100 move 967 733
+2110 down 1
+2114 up 1
+# select the hero, then the creature by the windmill twice
+2200 move 356 575
+2210 down 1
+2214 up 1
+2260 move 325 350
+2270 down 1
+2274 up 1
+2320 down 1
+2324 up 1
+# combat: auto combat (crossed swords)
+2900 move 984 265
+2910 down 1
+2914 up 1
+# the combat result: confirm
+12000 move 874 648
+12010 down 1
+12014 up 1
+# system menu (gears)
+12300 move 985 45
+12310 down 1
+12314 up 1
+# save the game
+12500 move 840 260
+12510 down 1
+12514 up 1
+12700 move 780 640
+12710 down 1
+12714 up 1
+12900 move 814 584
+12910 down 1
+12914 up 1
