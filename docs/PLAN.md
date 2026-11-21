@@ -74,9 +74,9 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 | M0  | Foundation                        | ✅ | Shared code imported from CulturesRecomp and renamed; CMake and Cargo build; CI and audit hook; `games/heroes4/game.toml` pins the installer and every binary; `recomp identify` recognises them. |
 | M1  | Read the inputs                   | ✅ | `recomp extract` unpacks the GOG installer with its `-1.bin` slice into `orig/heroes4/gog-de/`, byte-identical to innoextract, without third-party tools. The runtime loader maps `Heroes4.exe`. `--check` lists the missing imports. |
 | M2  | Find the code                     | ✅ | Coverage report for `Heroes4.exe`, `binkw32.dll` (and `Mp3dec.asi` if lifted): 100 % classified, every leftover settled by analysis or a manifest hint, as in both sister projects. |
-| M3  | Lift and build                    | ⬜ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `homm4-heroes4`; build time and memory measured and acceptable (see "Build size"). |
-| M4  | Boot to the main loop             | ⬜ | CRT start-up, registry, archives, threads; the game creates its window and asks DirectDraw 7 for a mode. |
-| M5  | Picture and input                 | ⬜ | Intro movies (Bink) and the main menu render; mouse and keyboard work; windowed and full-screen. |
+| M3  | Lift and build                    | ✅ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `homm4-heroes4`; build time and memory measured and acceptable (see "Build size"). |
+| M4  | Boot to the main loop             | ✅ | CRT start-up, registry, archives, threads; the game creates its window and asks DirectDraw 7 for a mode. |
+| M5  | Picture and input                 | 🔶 | Intro movies (Bink) and the main menu render; mouse and keyboard work; windowed and full-screen. |
 | M6  | Sound and music                   | ⬜ | DirectSound effects and ambience; MP3 music from `music.h4r` through the Miles RIB MP3 codec; Bink movie sound. |
 | M7  | Adventure map and combat          | ⬜ | A scenario map starts: adventure map, town screen, hero screen, a combat fought to the end, an AI turn. Save and load round-trip. |
 | M8  | In game                           | ⬜ | A campaign map of the base game played through by hand; a scripted one-hour soak without trap; hotseat with two players; game speed and AI turn time measured. |
@@ -152,36 +152,42 @@ Binary treatment (first proposal, see M2 and M6):
 
 ### M3 – Lift and build
 
-- [ ] `recomp lift` on all lifted binaries; traps listed (expected: CRT `int 6`, `int3` only)
+- [x] `recomp lift` on all lifted binaries: `Heroes4.exe` only the CRT's 16 `int 6`; `binkw32.dll` the same;
+      `Mp3dec.asi` also its 3DNow! paths (dead: no 3DNow! in `cpuid`)
 - [ ] Difftest `--coverage` on every lifted binary: every instruction form used is tested
 - [ ] **Build size** (main risk, see "Risks"): Cultures 1 gives ~42 MB of C for 0.64 MiB of code, so expect
       ~350 MB for `Heroes4.exe`. Measure and then decide:
-  - [ ] files of bounded size (split `code_XXXX.c` by function count or bytes, not only by 64 KiB of guest space)
-        so `make -j` parallelises and no single file needs gigabytes of compiler memory
-  - [ ] optimisation level for generated code per build type (`-O1` in dev, `-O2` in release), measured
+  - [x] file sizes: 87 files of up to 10 MB (one per 64 KiB of guest code) compile in parallel without
+        trouble; a full build takes 6½ minutes on 8 cores (38 CPU-minutes), about 2 GB per compiler
+  - [x] each code file declares only the functions it names, so a re-lift that adds a function recompiles
+        only the files that changed (before: every file, through `funcs.h`)
+  - [x] optimisation level: `-O1` for generated code (as in the sister projects); `-O2` to be measured in M13
   - [ ] ccache in CI; the lift is deterministic, so unchanged files are not recompiled (already true)
   - [ ] Cranelift (`rc-emit-native`) compile time for the converter; wasm module size for the browser
-- [ ] Warning-free with the full warning set on gcc and clang; MSVC in CI
-- [ ] Links into `homm4-heroes4`; dispatch tables for all lifted binaries
+- [x] Warning-free with the full warning set on gcc (clang and MSVC in CI)
+- [x] Links into `homm4-heroes4` (600 MB with debug info); dispatch tables for all lifted binaries
 
 ### M4 – Boot to the main loop
 
-- [ ] New kernel32 imports: `GetSystemInfo`, `GetProcessHeap`, `GetSystemTimeAsFileTime`, `VirtualQuery(Ex)`,
+- [x] New kernel32 imports: `GetSystemInfo`, `GetProcessHeap`, `GetSystemTimeAsFileTime`, `VirtualQuery(Ex)`,
       `VirtualLock`, `OpenFileMappingA`, `MapViewOfFileEx`, `OpenMutexA`, `OpenProcess`, `CreateProcessA`
       (find out what it starts: probably the GameSpy Arcade or a browser → refuse cleanly); ole32
       `CoInitializeEx`; winmm `timeBeginPeriod`/`timeEndPeriod`; user32 `MsgWaitForMultipleObjects`
-- [ ] Single-instance check (`CreateMutexA`/`OpenMutexA`) answers "first instance"
-- [ ] Registry: the installer's keys first, then the user's `registry.txt`
-- [ ] Archives: the game opens `data/*.h4r` (`heroes4`, `text`, `movies`, `music`, `storm`, `storm_override`,
+- [x] Single-instance check (`CreateMutexA`/`OpenMutexA`) answers "first instance"
+- [x] Registry: the installer's keys first, then the user's `registry.txt`
+- [x] Archives: the game opens `data/*.h4r` (`heroes4`, `text`, `movies`, `music`, `storm`, `storm_override`,
       `x2`, `x2_override`, `updates`; `new`, `storm_updates`, `x2_updates` are probed and may be missing).
       `CreateFileMapping`/`MapViewOfFile(Ex)` on these files: how much is mapped at once and where
       (**open**, RESEARCH). Native: map the host file into guest memory; browser: read through
       `rc_host_fread` in blocks (decision 2026-11-21 of CulturesRecomp)
-- [ ] Threads: `CreateThread`, events, mutexes, `WaitForSingleObject`, `MsgWaitForMultipleObjects` on the shared
-      thread layer; find out what each thread does (loading, AI, sound streaming) (**open**)
-- [ ] `CoCreateInstance`: which class (**open**: DirectSound, DirectDraw, or something optional)
-- [ ] The game creates its window (with a menu bar: `LoadMenuA`/`SetMenu` — windowed mode) and calls
-      `DirectDrawCreateEx`
+- [x] Threads: `CreateThread`, events, mutexes, `WaitForSingleObject`, `MsgWaitForMultipleObjects` on the shared
+      thread layer (what each thread does: still **open**)
+- [x] `CoCreateInstance`: not reached up to the main menu
+- [x] The game creates its window and calls `DirectDrawCreateEx`; the intro movie and the main menu render
+- [x] Structured exceptions (new in the shared runtime): `RaiseException` and `RtlUnwind` walk the guest's
+      `fs:[0]` chain and call its handlers (MSVC's own `__CxxFrameHandler`, `__except_handler3`, lifted); a
+      handler's jump to a frame further up unwinds the lifted functions to it (a check after every call).
+      The native and WebAssembly back ends need the same check (M12)
 
 ### M5 – Picture and input
 
