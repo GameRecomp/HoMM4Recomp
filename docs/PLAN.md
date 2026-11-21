@@ -77,8 +77,8 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 | M3  | Lift and build                    | ✅ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `homm4-heroes4`; build time and memory measured and acceptable (see "Build size"). |
 | M4  | Boot to the main loop             | ✅ | CRT start-up, registry, archives, threads; the game creates its window and asks DirectDraw 7 for a mode. |
 | M5  | Picture and input                 | 🔶 | Intro movies (Bink) and the main menu render; mouse and keyboard work; windowed and full-screen. |
-| M6  | Sound and music                   | ⬜ | DirectSound effects and ambience; MP3 music from `music.h4r` through the Miles RIB MP3 codec; Bink movie sound. |
-| M7  | Adventure map and combat          | ⬜ | A scenario map starts: adventure map, town screen, hero screen, a combat fought to the end, an AI turn. Save and load round-trip. |
+| M6  | Sound and music                   | 🔶 | DirectSound effects and ambience; MP3 music from `music.h4r` through the Miles RIB MP3 codec; Bink movie sound. |
+| M7  | Adventure map and combat          | 🔶 | A scenario map starts: adventure map, town screen, hero screen, a combat fought to the end, an AI turn. Save and load round-trip. |
 | M8  | In game                           | ⬜ | A campaign map of the base game played through by hand; a scripted one-hour soak without trap; hotseat with two players; game speed and AI turn time measured. |
 | M9  | **Release v0.1**                  | ⬜ | Base game, *Gathering Storm* and *Winds of War* campaigns each start and their first map is played through; Linux, Windows and the CLI converter; release notes with the known issues. |
 | M10 | Multiplayer                       | ⬜ | TCP/IP games between two recompiled builds over LAN (host sockets under `wsock32`); GameSpy menu entries answer "not available" cleanly. |
@@ -191,37 +191,45 @@ Binary treatment (first proposal, see M2 and M6):
 
 ### M5 – Picture and input
 
-- [ ] `ddraw` DirectDraw 7: the game's modes (800 × 600 and larger, 16-bit; confirm), surfaces, `Lock`/`Unlock`,
-      blits, `Flip`; windowed mode with a clipper and `Blt` to the primary surface; GDI `CreateDIBSection` +
-      `BitBlt` paths
-- [ ] Window menu (`LoadMenuA`, `SetMenu`, `CheckMenuItem`, `EnableMenuItem`, accelerators): drawn by our
-      user32 or hidden; its commands reachable (decision in M5)
-- [ ] Input from window messages: mouse (`SetCapture`, `WindowFromPoint`, `GetCursorPos`, `ClientToScreen`),
-      keyboard (`GetKeyState`, accelerators); cursors from the game's resources (`LoadImageA`, `LoadCursorA`)
-- [ ] Bink intro movies from `movies.h4r` through the lifted `binkw32.dll` (`BinkCopyToBuffer` into a surface)
-- [ ] Main menu, the scenario list, the options screen render; scripted runs (`RC_INPUT`, `RC_SCREENSHOT`)
+- [x] `ddraw` DirectDraw 7: the game's 1024 × 768 16-bit mode, surfaces, `Lock`/`Unlock`, blits; `GetBltStatus`,
+      `GetFlipStatus`, `PageLock`. The game copies to the screen only what changed: an idle frame after 50 ms
+      without one keeps scripted runs, screenshots and the frame hook going
+- [x] Window geometry: the game window gets its class's menu (as Windows does), and a game window counts the
+      menu bar's room in its client area: Heroes IV moves its full-screen window to y = -20 (above the screen
+      by the bar), and without that its picture and every point it converted were 20 pixels off
+- [x] Input from window messages: mouse (the game converts points with `ClientToScreen` and hit-tests in
+      screen space; it draws its own cursor from `GetCursorPos`), keyboard (Escape skips the movies)
+- [x] Bink intro movies from `movies.h4r` through the lifted `binkw32.dll`
+- [x] Main menu, the New Game menu, the scenario list, the player settings, the adventure map, a town screen,
+      the combat screen and its options, the system menu, the save and load dialogs render; scripted runs
+      (`tools/run-scenario heroes4 menu|firstturn|battle`) repeat exactly
+- [ ] By hand on a desktop: windowed mode and its menu bar (the game offers a window), full screen, Alt+Enter
 
 ### M6 – Sound and music
 
-- [ ] DirectSound (`DirectSoundCreate`, CulturesRecomp's `dsound` on the platform PCM streams): the game's
-      buffers, looping ambience, 3D/pan if used, `Bink`'s DirectSound track
-- [ ] Miles RIB: `AIL_startup`, `AIL_shutdown`, `RIB_find_files_provider` (finds `*.asi` providers by attribute,
-      e.g. "Input file types" = `*.mp3`), `RIB_request_interface` (returns the provider's function table).
-      Two options, decide by effort:
+- [x] DirectSound (`DirectSoundCreate`, CulturesRecomp's `dsound` on the platform PCM streams): the game's
+      buffers and Bink's DirectSound track play; on the virtual clock the play position follows that clock
+      (scripted runs repeat)
+- [x] Miles RIB: `Mp3dec.asi` (lifted) registers "ASI codec" and "ASI stream" from its `DllMain`;
+      `RIB_find_files_provider` matches its file-type filter list, `RIB_request_interface` writes the entries
+      into the game's variables (the RIB functions are stdcall); Miles starts the codec (`ASI_startup`)
+      before handing it out. The game decodes its music through it into DirectSound. Decided: **lift**
+      (below, the alternative kept for reference)
   - **lift `Mp3dec.asi`** (proposal): our `mss32` loads the lifted provider, runs its `RIB_Main` registration and
     hands its interface to the game. Faithful and consistent with "lift middleware with a narrow API".
   - **HLE the codec**: `ASI_stream_open`/`ASI_stream_process`/… in `hle/mss32` on a vendored MP3 decoder
     (minimp3, CC0). Smaller code for wasm, but a second MP3 implementation to keep right.
-- [ ] Music tracks from `music.h4r` stream without gaps; volume sliders
+- [ ] Music tracks from `music.h4r` stream without gaps (decoding runs; to be heard); volume sliders
 - [ ] By ear on a desktop: balance of music, effects and movie sound
 
 ### M7 – Adventure map and combat
 
-- [ ] New game on a scenario map (single player against the AI): adventure map scrolls, heroes move, towns open
-- [ ] Combat screen: a battle fought to the end (manual and quick combat), spells, the AI's moves
-- [ ] AI turn completes; its duration measured against the original on Windows (if available) or a reference
-- [ ] Save and load (`.h4s` in the user directory), quick save, the high-score table (`high_scores.dat`, copied
-      to the user directory on first write)
+- [x] New game on a scenario map (single player against the AI): a hero moves (path shown), a town opens
+- [x] Combat screen: a battle fought to the end with automatic combat, the result screen
+- [ ] Manual combat, spells
+- [x] AI turn completes (the computer players' first turn; duration still to measure)
+- [x] Save and load (`.h4s` in the user directory's `games/`): saved over the autosave from the system menu,
+      loaded again from the main menu; quick save and the high-score table still to check
 - [ ] Screens: hero, town (all town types), kingdom overview, marketplace, the map editor's random-map options
       if present
 

@@ -101,6 +101,30 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
 - `binkw32.dll` and `Mp3dec.asi` are linked with the same CRT as CulturesRecomp's Bink builds: the same four
   unreferenced x87 error stubs and the x87 argument-load helper need hints.
 
+## Running the game (M4–M7)
+
+- Start-up needs Miles' RIB as plug-ins use it: `Mp3dec.asi` has no exports; its `DllMain` calls
+  `RIB_provider_library_handle` and `RIB_register_interface` ("ASI codec": `PROVIDER_query_attribute`,
+  `ASI_startup`, …, attributes "Name", "Input file types" …; "ASI stream": `ASI_stream_open`, `…_process`,
+  `…_seek`, `…_close`, attributes and the preferences "Requested sample rate", "Requested bit width"). An
+  entry is (type, name, token, subtype). The game calls `RIB_find_files_provider("ASI codec", "Input file
+  types", "a.mp3", …)`; the attribute's value is a filter list ("MPEG Layer 3 audio files", "*.mp3", …). It
+  requests the stream interface with tokens that are the addresses of its own variables, and preferences the
+  decoder does not have ("Raw source sample rate", "Layer"), which stay unset. The undecorated
+  `RIB_*_interface` functions are stdcall.
+- The game throws C++ exceptions in ordinary use: a `bool` in the menus, rethrown inside a catch block (the
+  CRT's own `__except` in `CallCatchBlock` catches the rethrow). The shared runtime had no exception
+  support; it now dispatches SEH on the guest's chain and unwinds the lifted functions (PLAN M4). Of the
+  game's functions, 162 have catch continuations outside their own code (code after a `try` that only the
+  catch reaches).
+- Its menus copy to the screen only what changed; nothing is presented while the screen stands still.
+- The window class has a menu (`lpszMenuName`); in full screen the game sets `WS_POPUP`, sizes the window with
+  `AdjustWindowRectEx(…, bMenu = TRUE)` and moves it to y = -20 so that the menu bar lies above the screen.
+- Buttons react to the release; the main menu's buttons are hit on their icons, not their labels. Pop-up
+  menu items are chosen by the pointer position the game polls (`GetCursorPos`).
+- A save of the first scenario after one battle is 134 KB, in `games/` below the user directory (GOG's script
+  names `{app}/games` as the save folder).
+
 ## Open questions
 
 See the list in [PLAN.md](PLAN.md#research-questions).
