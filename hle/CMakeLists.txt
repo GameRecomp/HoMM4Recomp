@@ -29,6 +29,7 @@ add_library(rc_hle STATIC
     user32/menu.c
     user32/controls.c
     user32/dialog.c
+    user32/mdi.c
     comctl32/comctl32.c
     comdlg32/comdlg32.c
     gdi32/gdi32.c

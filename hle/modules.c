@@ -39,6 +39,7 @@ void rc_hle_user32(void)
     rc_register_imports(rc_user32_draw, rc_user32_draw_count);
     rc_menu_init();
     rc_controls_init();
+    rc_mdi_init();
     rc_dialog_init();
     rc_comctl32_init();
     rc_comdlg32_init();

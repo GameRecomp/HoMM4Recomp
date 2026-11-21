@@ -10,6 +10,7 @@
 #include <time.h>
 
 #include "k32.h"
+#include "rc/vm.h"
 #include "rc/log.h"
 #include "rc/process.h"
 
@@ -23,6 +24,27 @@ static void k_CoUninitialize(rc_cpu *c) { RC_RETURN(c, 0, 0); }
 
 /* CoInitializeEx(reserved, model): as CoInitialize; the threading model does not matter here. */
 static void k_CoInitializeEx(rc_cpu *c) { RC_RETURN(c, S_OK, 2); }
+/* OleInitialize(reserved), OleUninitialize(): OLE is COM here. */
+static void k_OleInitialize(rc_cpu *c) { RC_RETURN(c, S_OK, 1); }
+static void k_OleUninitialize(rc_cpu *c) { RC_RETURN(c, 0, 0); }
+/* CoRegisterMessageFilter(new, old*): no other apartments call in. */
+static void k_CoRegisterMessageFilter(rc_cpu *c)
+{
+    if (RC_ARG(c, 1)) {
+        rc_st32(RC_ARG(c, 1), 0);
+    }
+    RC_RETURN(c, S_OK, 2);
+}
+static void k_CoFreeUnusedLibraries(rc_cpu *c) { RC_RETURN(c, 0, 0); }
+/* CoTaskMemAlloc(size), CoTaskMemFree(p): the heap. */
+static void k_CoTaskMemAlloc(rc_cpu *c) { RC_RETURN(c, rc_heap_alloc(RC_ARG(c, 0) ? RC_ARG(c, 0) : 1, false), 1); }
+static void k_CoTaskMemFree(rc_cpu *c)
+{
+    if (RC_ARG(c, 0) && rc_heap_owns(RC_ARG(c, 0))) {
+        rc_heap_free(RC_ARG(c, 0));
+    }
+    RC_RETURN(c, 0, 1);
+}
 
 static void guid(uint32_t p, char *out, size_t n)
 {
@@ -90,6 +112,12 @@ const rc_import_def rc_ole32_defs[] = {
     {OLE, "CoCreateGuid", k_CoCreateGuid},
     {OLE, "CoInitialize", k_CoInitialize},
     {OLE, "CoInitializeEx", k_CoInitializeEx},
+    {OLE, "OleInitialize", k_OleInitialize},
+    {OLE, "OleUninitialize", k_OleUninitialize},
+    {OLE, "CoRegisterMessageFilter", k_CoRegisterMessageFilter},
+    {OLE, "CoFreeUnusedLibraries", k_CoFreeUnusedLibraries},
+    {OLE, "CoTaskMemAlloc", k_CoTaskMemAlloc},
+    {OLE, "CoTaskMemFree", k_CoTaskMemFree},
     {OLE, "CoUninitialize", k_CoUninitialize},
     {OLE, "CoCreateInstance", k_CoCreateInstance},
 };

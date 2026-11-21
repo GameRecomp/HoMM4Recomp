@@ -247,6 +247,7 @@ void rc_dialog_end(rc_cpu *c, uint32_t hwnd, uint32_t result);
 /* MessageBoxA's box (answered at once when there is no desktop). */
 uint32_t rc_message_box(rc_cpu *c, uint32_t owner, const char *text, const char *caption, uint32_t type);
 void rc_controls_init(void);
+void rc_mdi_init(void);
 void rc_menu_init(void);
 
 extern const rc_import_def rc_user32_windows[];

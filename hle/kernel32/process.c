@@ -466,6 +466,15 @@ static void k_GetComputerNameA(rc_cpu *c)
 /* Guest threads take turns; their priorities change nothing. */
 static void k_SetThreadPriority(rc_cpu *c) { RC_RETURN(c, 1, 2); }
 
+static void k_lstrlenW(rc_cpu *c)
+{
+    uint32_t s = RC_ARG(c, 0), n = 0;
+    while (s && rc_ld16(s + 2 * n)) {
+        n++;
+    }
+    RC_RETURN(c, n, 1);
+}
+
 static void k_lstrlenA(rc_cpu *c)
 {
     uint32_t s = RC_ARG(c, 0);
@@ -925,6 +934,7 @@ const rc_import_def rc_k32_process[] = {
     {K32, "GetTimeFormatA", k_GetTimeFormatA},
     {K32, "GetComputerNameA", k_GetComputerNameA},
     {K32, "lstrlenA", k_lstrlenA},
+    {K32, "lstrlenW", k_lstrlenW},
     {K32, "SetThreadPriority", k_SetThreadPriority},
     {K32, "GetLocalTime", k_GetSystemTime},
     {K32, "FileTimeToSystemTime", k_FileTimeToSystemTime},

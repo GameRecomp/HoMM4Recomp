@@ -1034,6 +1034,7 @@ static void k_GetCaretPos(rc_cpu *c)
     RC_RETURN(c, 1, 1);
 }
 static void k_GetCaretBlinkTime(rc_cpu *c) { RC_RETURN(c, 530, 0); }
+static void k_GetDoubleClickTime(rc_cpu *c) { RC_RETURN(c, 500, 0); }
 
 const rc_import_def rc_user32_input[] = {
     {U32, "PeekMessageA", k_PeekMessageA},
@@ -1069,5 +1070,6 @@ const rc_import_def rc_user32_input[] = {
     {U32, "SetCaretPos", k_SetCaretPos},
     {U32, "GetCaretPos", k_GetCaretPos},
     {U32, "GetCaretBlinkTime", k_GetCaretBlinkTime},
+    {U32, "GetDoubleClickTime", k_GetDoubleClickTime},
 };
 const uint32_t rc_user32_input_count = sizeof rc_user32_input / sizeof rc_user32_input[0];

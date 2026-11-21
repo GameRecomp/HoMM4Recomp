@@ -818,6 +818,10 @@ static void k_ImageList_Create(rc_cpu *c) { RC_RETURN(c, 0x00ab1000u, 5); }
 static void k_ImageList_Destroy(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 
 static void k_InitCommonControls(rc_cpu *c) { RC_RETURN(c, 0, 0); }
+
+/* CreateMappedBitmap(instance, id, flags, color map, count) (ordinal 8): the bitmap resource;
+ * its colours are left as they are (the system colours it would map them to are the same here). */
+static void k_CreateMappedBitmap(rc_cpu *c) { RC_RETURN(c, rc_load_bitmap(RC_ARG(c, 0), RC_ARG(c, 1)), 5); }
 static void k_InitCommonControlsEx(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 /* _TrackMouseEvent(TRACKMOUSEEVENT): accepted (no WM_MOUSELEAVE is sent). */
 static void k_TrackMouseEvent(rc_cpu *c) { RC_RETURN(c, 1, 1); }
@@ -836,6 +840,8 @@ static void k_DllGetVersion(rc_cpu *c)
 static const rc_import_def defs[] = {
     {CC, "DllGetVersion", k_DllGetVersion},
     {CC, "#17", k_InitCommonControls},
+    {CC, "#8", k_CreateMappedBitmap},
+    {CC, "CreateMappedBitmap", k_CreateMappedBitmap},
     {CC, "InitCommonControls", k_InitCommonControls},
     {CC, "InitCommonControlsEx", k_InitCommonControlsEx},
     {CC, "_TrackMouseEvent", k_TrackMouseEvent},

@@ -40,11 +40,14 @@ returns = [0x008e5aa5]   # CRT x87 argument load: returns; a second entry follow
 [[binary]]
 name = "campaign_editor.exe"
 role = "editor"
-treatment = "ignore"
+treatment = "lift"
 size = 4513792
 sha256 = "5deed9f176cc039c2465bceb4f6b84fa3d023848831834987d545284a2ced56f"
 variants = ["gog-de"]
-notes = "MFC campaign editor; lifted from M11 on (each lifted executable adds hundreds of MB of C)."
+notes = "MFC campaign editor (M11): homm4-heroes4 --exe campaign_editor.exe."
+[binary.discover]
+no_return = [0x00663984] # CRT _exit: returns only for other callers of the shared doexit
+returns = [0x0066cf45]   # CRT x87 argument load: returns; a second entry follows each call to it
 
 # --- libraries -----------------------------------------------------------------
 

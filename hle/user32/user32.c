@@ -565,10 +565,72 @@ static void k_LoadCursorFromFileA(rc_cpu *c)
     RC_RETURN(c, h, 1);
 }
 
-/* The clipboard is not shared with the host: it cannot be opened and holds nothing. */
-static void k_OpenClipboard(rc_cpu *c) { RC_RETURN(c, 0, 1); }
-static void k_GetClipboardData(rc_cpu *c) { RC_RETURN(c, 0, 1); }
+/* The clipboard: the program's own (not shared with the host), enough for copying and pasting
+ * inside it (an editor's objects). Formats it registers get numbers from 0xC000 on. */
+#define CLIP_FORMATS 32
+static struct {
+    uint32_t format, handle;
+} clip[CLIP_FORMATS];
+static uint32_t nclip;
+static char clip_names[64][64];
+static uint32_t nclip_names;
+
+static void k_OpenClipboard(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 static void k_CloseClipboard(rc_cpu *c) { RC_RETURN(c, 1, 0); }
+static void k_EmptyClipboard(rc_cpu *c)
+{
+    nclip = 0;
+    RC_RETURN(c, 1, 0);
+}
+
+static uint32_t clip_find(uint32_t format)
+{
+    for (uint32_t i = 0; i < nclip; i++) {
+        if (clip[i].format == format) {
+            return i;
+        }
+    }
+    return CLIP_FORMATS;
+}
+
+/* GetClipboardData(format), SetClipboardData(format, handle), IsClipboardFormatAvailable(format) */
+static void k_GetClipboardData(rc_cpu *c)
+{
+    uint32_t i = clip_find(RC_ARG(c, 0));
+    RC_RETURN(c, i < CLIP_FORMATS ? clip[i].handle : 0, 1);
+}
+
+static void k_SetClipboardData(rc_cpu *c)
+{
+    uint32_t format = RC_ARG(c, 0), handle = RC_ARG(c, 1), i = clip_find(format);
+    if (i == CLIP_FORMATS) {
+        if (nclip == CLIP_FORMATS) {
+            RC_RETURN(c, 0, 2);
+        }
+        i = nclip++;
+    }
+    clip[i].format = format;
+    clip[i].handle = handle;
+    RC_RETURN(c, handle, 2);
+}
+
+static void k_IsClipboardFormatAvailable(rc_cpu *c) { RC_RETURN(c, clip_find(RC_ARG(c, 0)) < CLIP_FORMATS, 1); }
+
+/* RegisterClipboardFormatA(name): the same number for the same name. */
+static void k_RegisterClipboardFormatA(rc_cpu *c)
+{
+    const char *name = RC_ARG(c, 0) ? rc_str(RC_ARG(c, 0)) : "";
+    for (uint32_t i = 0; i < nclip_names; i++) {
+        if (strcmp(clip_names[i], name) == 0) {
+            RC_RETURN(c, 0xc000u + i, 1);
+        }
+    }
+    if (nclip_names == 64) {
+        RC_RETURN(c, 0, 1);
+    }
+    snprintf(clip_names[nclip_names], sizeof clip_names[0], "%s", name);
+    RC_RETURN(c, 0xc000u + nclip_names++, 1);
+}
 
 /* wsprintfA(buffer, format, ...): cdecl, so the caller removes the arguments. The
  * conversions Windows has: %c %d %i %u %x %X %s and %%, with the flags '-', '0' and '#',
@@ -988,6 +1050,10 @@ const rc_import_def rc_user32_setup[] = {
     {U32, "OpenClipboard", k_OpenClipboard},
     {U32, "GetClipboardData", k_GetClipboardData},
     {U32, "CloseClipboard", k_CloseClipboard},
+    {U32, "EmptyClipboard", k_EmptyClipboard},
+    {U32, "SetClipboardData", k_SetClipboardData},
+    {U32, "IsClipboardFormatAvailable", k_IsClipboardFormatAvailable},
+    {U32, "RegisterClipboardFormatA", k_RegisterClipboardFormatA},
     {U32, "SetCursor", k_SetCursor},
     {U32, "ShowCursor", k_ShowCursor},
     {U32, "LoadIconA", k_LoadIconA},

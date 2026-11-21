@@ -184,6 +184,21 @@ static void k_FindResourceA(rc_cpu *c)
     RC_RETURN(c, 0x7e000000u + 4 * nres++, 3);
 }
 
+/* FindResourceExA(module, type, name, language): resources are found by type and name; the
+ * language is the one the program has. */
+static void k_FindResourceExA(rc_cpu *c)
+{
+    uint32_t mod = RC_ARG(c, 0), type = RC_ARG(c, 1), name = RC_ARG(c, 2);
+    /* FindResourceA(module, name, type): the same with the arguments in its order */
+    c->r[RC_ESP] += 4;
+    uint32_t ret = rc_ld32(c->r[RC_ESP] - 4);
+    rc_st32(c->r[RC_ESP], ret);
+    rc_st32(c->r[RC_ESP] + 4, mod);
+    rc_st32(c->r[RC_ESP] + 8, name);
+    rc_st32(c->r[RC_ESP] + 12, type);
+    k_FindResourceA(c);
+}
+
 static uint32_t res_index(uint32_t h) { return h >= 0x7e000000u ? (h - 0x7e000000u) / 4 : RESOURCES; }
 
 /* LoadResource(module, hrsrc) */
@@ -278,6 +293,9 @@ static void k_GetProfileStringA(rc_cpu *c)
     RC_RETURN(c, rc_put_str(RC_ARG(c, 3), RC_ARG(c, 4), def ? rc_str(def) : ""), 5);
 }
 
+/* GetProfileIntA(section, key, default): no win.ini, the default. */
+static void k_GetProfileIntA(rc_cpu *c) { RC_RETURN(c, RC_ARG(c, 2), 3); }
+
 /* MulDiv(a, b, c): a * b / c rounded, -1 when c is 0. */
 static void k_MulDiv(rc_cpu *c)
 {
@@ -305,6 +323,8 @@ static const rc_import_def defs[] = {
     {K32, "DeleteAtom", k_GlobalDeleteAtom},
     {K32, "GetAtomNameA", k_GlobalGetAtomNameA},
     {K32, "FindResourceA", k_FindResourceA},
+    {K32, "FindResourceExA", k_FindResourceExA},
+    {K32, "GetProfileIntA", k_GetProfileIntA},
     {K32, "LoadResource", k_LoadResource},
     {K32, "SizeofResource", k_SizeofResource},
     {K32, "LockResource", k_LockResource},
