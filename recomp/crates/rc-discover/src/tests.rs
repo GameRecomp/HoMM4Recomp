@@ -327,3 +327,84 @@ fn switch_bounded_through_a_stack_slot() {
     assert_eq!(t.bound, "compare");
     assert!(m.warnings.is_empty(), "{:?}", m.warnings);
 }
+
+#[test]
+fn switch_bound_across_an_x87_store() {
+    // cmp eax, 2; fstp dword [esp+4]; ja default; jmp [eax*4+table]: x87 instructions write
+    // only C0-C3, so the compare still bounds the table.
+    let table: Vec<u8> = [0x40_1030u32, 0x40_1036, 0x40_103c]
+        .iter()
+        .flat_map(|&a| le(a))
+        .collect();
+    let c = code(
+        0x50,
+        &[
+            (0x40_1000, &[0xe8, 0x0b, 0, 0, 0]),             // call 0x401010
+            (0x40_1005, &[0x6a, 0x00]),                      // push 0
+            (0x40_1007, &[0xff, 0x15, 0x00, 0x20, 0x40, 0]), // call [ExitProcess]
+            (0x40_1010, &[0x8b, 0x44, 0x24, 0x04]),          // mov eax, [esp+4]
+            (0x40_1014, &[0x83, 0xf8, 0x02]),                // cmp eax, 2
+            (0x40_1017, &[0xd9, 0x5c, 0x24, 0x04]),          // fstp dword [esp+4]
+            (0x40_101b, &[0x77, 0x22]),                      // ja 0x40103f
+            (0x40_101d, &[0xff, 0x24, 0x85, 0x24, 0x10, 0x40, 0x00]), // jmp [eax*4+0x401024]
+            (0x40_1024, &table),
+            (0x40_1030, &[0xb8, 1, 0, 0, 0, 0xc3]), // case 0
+            (0x40_1036, &[0xb8, 2, 0, 0, 0, 0xc3]), // case 1
+            (0x40_103c, &[0x31, 0xc0, 0xc3]),       // case 2
+            (0x40_103f, &[0x83, 0xc8, 0xff, 0xc3]), // default
+        ],
+    );
+    let m = discover(&image(&c, &[0; 0x10]), &Options::default(), "t.exe", "00");
+    assert_eq!(m.jump_tables.len(), 1);
+    assert_eq!(m.jump_tables[0].count, 3);
+    assert_eq!(m.jump_tables[0].bound, "compare");
+    assert!(m.unknown.is_empty(), "unknown: {:?}", m.unknown);
+}
+
+#[test]
+fn alignment_fill_of_leftover_bytes() {
+    // After the entry's `ret`, bytes that are neither int3 nor nop fill up to the next
+    // 16-byte aligned function; tried as code they run into it.
+    let c = code(
+        0x20,
+        &[
+            (0x40_1000, &[0xe8, 0x0b, 0, 0, 0]), // call 0x401010
+            (0x40_1005, &[0xc3]),                // ret
+            (
+                0x40_1006,
+                &[0x8b, 0x44, 0x24, 0x04, 0x8b, 0x4c, 0x24, 0x08, 0x8b, 0x54],
+            ),
+            (0x40_1010, &[0x56, 0x8b, 0xf1, 0x5e, 0xc3]),
+        ],
+    );
+    let m = discover(&image(&c, &[0; 0x10]), &Options::default(), "t.exe", "00");
+    assert!(m.unknown.is_empty(), "unknown: {:?}", m.unknown);
+    assert!(m
+        .padding
+        .iter()
+        .any(|p| p[0].0 == 0x40_1006 && p[1].0 == 0x40_1010));
+}
+
+#[test]
+fn dead_tail_after_a_call_that_does_not_return() {
+    // push esi; call noreturn; pop esi (dead), and a function right after the dead byte.
+    let c = code(
+        0x30,
+        &[
+            (0x40_1000, &[0x56]),                            // push esi
+            (0x40_1001, &[0xe8, 0x1a, 0, 0, 0]),             // call 0x401020
+            (0x40_1006, &[0x5e]),                            // pop esi (never runs)
+            (0x40_1007, &[0x33, 0xc0, 0xc3]),                // only referenced from .rdata
+            (0x40_1020, &[0x6a, 0x00]),                      // push 0
+            (0x40_1022, &[0xff, 0x15, 0x00, 0x20, 0x40, 0]), // call [ExitProcess]
+        ],
+    );
+    let mut rdata = vec![0u8; 0x20];
+    rdata[0x10..0x14].copy_from_slice(&le(0x40_1007));
+    let m = discover(&image(&c, &rdata), &Options::default(), "t.exe", "00");
+    assert!(m.unknown.is_empty(), "unknown: {:?}", m.unknown);
+    assert!(m
+        .dead_code
+        .iter()
+        .any(|d| d[0].0 == 0x40_1006 && d[1].0 == 0x40_1007));
+}

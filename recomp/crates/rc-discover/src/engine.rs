@@ -7,7 +7,7 @@
 use crate::image::Image;
 use iced_x86::{
     ConditionCode, Decoder, DecoderOptions, FlowControl, Instruction, MemorySize, Mnemonic, OpKind,
-    Register,
+    Register, RflagsBits,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -962,14 +962,20 @@ impl<'a> Engine<'a> {
                         i.immediate(1) as u32
                     };
                     // The first conditional branch after the compare, with no flag writes
-                    // in between.
+                    // in between (x87 instructions write only C0-C3, which branches do not read).
+                    let arith = RflagsBits::OF
+                        | RflagsBits::SF
+                        | RflagsBits::ZF
+                        | RflagsBits::AF
+                        | RflagsBits::CF
+                        | RflagsBits::PF;
                     let mut cc = None;
                     for a in later.iter().rev() {
                         if a.flow_control() == FlowControl::ConditionalBranch {
                             cc = Some(a.condition_code());
                             break;
                         }
-                        if a.rflags_modified() != 0 {
+                        if a.rflags_modified() & arith != 0 {
                             break;
                         }
                     }
@@ -1677,6 +1683,15 @@ impl<'a> Engine<'a> {
                     }
                 }
             }
+            if p == s && self.dead_tail(p, e, &refs) {
+                continue;
+            }
+            if self.alignment_fill(p, e, &refs) {
+                for va in p..e {
+                    self.set_state(va, PAD);
+                }
+                continue;
+            }
             if self.sp.get(p) == Some(UNK) {
                 if let Some((n, pad)) = self.string_at(p, e) {
                     let _ = self.mark_data(p, p + n, DataKind::String, true);
@@ -1695,6 +1710,57 @@ impl<'a> Engine<'a> {
             }
         }
         progress
+    }
+
+    /// The stack clean-up after a call that does not return, squeezed in front of the next
+    /// function (`call _CxxThrowException; pop esi` with an EH funclet right after it), which
+    /// the gap pass cannot try as a function of its own. It must decode into whole instructions
+    /// that end exactly where the code after the gap starts, and nothing may refer to it.
+    fn dead_tail(&mut self, p: u32, e: u32, refs: &HashSet<u32>) -> bool {
+        if !self.after_noret.contains(&p)
+            || e - p >= 16
+            || self.sp.get(e) != Some(INSN)
+            || (p..e).any(|va| self.sp.get(va) != Some(UNK) || refs.contains(&va))
+        {
+            return false;
+        }
+        let mut q = p;
+        let mut lens = Vec::new();
+        while q < e {
+            let Some(i) = decode_at(self.img, q) else {
+                return false;
+            };
+            lens.push((q, i.len() as u32));
+            q += i.len() as u32;
+        }
+        if q != e {
+            return false;
+        }
+        for (va, n) in lens {
+            self.set_state(va, INSN);
+            for b in va + 1..va + n {
+                self.set_state(b, BODY);
+            }
+        }
+        self.dead.push((p, e));
+        true
+    }
+
+    /// Alignment fill that is neither `int3` nor `nop`: some MSVC 6 builds (Heroes IV) pad the
+    /// space between a function's last instruction and the next 16-byte aligned function with
+    /// leftover bytes, often the tail of a nearby instruction (`ff 15 <iat> … c3`). Such a gap is
+    /// shorter than 16 bytes, follows code, ends where a function or label starts at a 16-byte
+    /// boundary, is
+    /// still unknown after trying it as a function, and nothing refers to it.
+    fn alignment_fill(&self, p: u32, e: u32, refs: &HashSet<u32>) -> bool {
+        p > 0
+            && e > p
+            && e - p < 16
+            && e.is_multiple_of(16)
+            && matches!(self.sp.get(p - 1), Some(INSN | BODY))
+            && self.sp.get(e) == Some(INSN)
+            && (self.funcs.contains_key(&e) || self.labels.contains_key(&e))
+            && (p..e).all(|va| self.sp.get(va) == Some(UNK) && !refs.contains(&va))
     }
 
     /// A run of at least 8 printable ASCII characters (CR, LF and tab included) that nothing
