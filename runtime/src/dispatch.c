@@ -128,6 +128,44 @@ rc_fn rc_lookup_lifted(uint32_t addr)
     return NULL;
 }
 
+void rc_dispatch_jump(rc_cpu *c, uint32_t target)
+{
+    if (c->eh_depth && c->r[RC_ESP] > c->eh_esp) {
+        c->unwind = 1;
+        c->unwind_eip = target;
+        c->unwind_ebp = c->r[RC_EBP];
+        c->eip = target;
+        return;
+    }
+    rc_dispatch(c, target);
+}
+
+void rc_unwind_claim(rc_cpu *c, uint32_t ebp, uint32_t lo, uint32_t hi, const uint32_t *at, uint32_t n)
+{
+    if (c->unwind_ebp != ebp) {
+        return;
+    }
+    bool mine = c->unwind_eip >= lo && c->unwind_eip < hi;
+    for (uint32_t i = 0; i < n && !mine; i++) {
+        mine = at[i] == c->unwind_eip;
+    }
+    if (!mine) {
+        return;
+    }
+    c->unwind = 0;
+    c->resume_eip = c->unwind_eip;
+    rc_dispatch(c, c->unwind_eip);
+    c->resume_eip = 0;
+}
+
+void rc_unwind_begin(rc_cpu *c, uint32_t eip)
+{
+    c->unwind = 1;
+    c->unwind_eip = eip;
+    c->unwind_ebp = c->r[RC_EBP];
+    c->eip = eip;
+}
+
 void rc_dispatch(rc_cpu *c, uint32_t target)
 {
     if (call_hook) {

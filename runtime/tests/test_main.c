@@ -11,6 +11,7 @@ int main(void)
     test_vm();
     test_thread();
     test_load();
+    test_unwind();
     if (rc_test_failures) {
         fprintf(stderr, "%d check(s) failed\n", rc_test_failures);
         return 1;

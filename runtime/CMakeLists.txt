@@ -45,7 +45,7 @@ if(NOT MSVC)
 endif()
 
 if(RC_BUILD_TESTS)
-    add_executable(rc_runtime_tests tests/test_main.c tests/test_mem.c tests/test_cpu.c tests/test_x87.c tests/test_vm.c tests/test_thread.c tests/test_load.c)
+    add_executable(rc_runtime_tests tests/test_main.c tests/test_mem.c tests/test_cpu.c tests/test_x87.c tests/test_vm.c tests/test_thread.c tests/test_load.c tests/test_unwind.c)
     target_link_libraries(rc_runtime_tests PRIVATE rc_runtime)
     add_test(NAME runtime COMMAND rc_runtime_tests)
 endif()

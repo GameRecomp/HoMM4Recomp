@@ -31,5 +31,6 @@ void test_x87(void);
 void test_thread(void);
 void test_vm(void);
 void test_load(void);
+void test_unwind(void);
 
 #endif

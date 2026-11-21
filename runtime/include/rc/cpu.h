@@ -57,6 +57,15 @@ typedef struct rc_cpu {
      * separate the two uses with emms, so they are kept apart here (and
      * last, so the fields above keep their offsets). */
     uint64_t mm[8];
+    /* Exceptions (kernel32's RaiseException): eh_depth counts the exceptions being dispatched,
+     * eh_esp is the stack pointer at the innermost RaiseException. When a handler continues in
+     * a frame further up the stack (a catch block's continuation, an __except block), `unwind`
+     * is set with where to continue and that frame's ebp: lifted functions return after each
+     * call until the frame that holds the place takes it over (rc_unwind_claim). */
+    uint32_t unwind, unwind_eip, unwind_ebp;
+    uint32_t eh_depth, eh_esp;
+    /* The continuation rc_unwind_claim is entering (an __except block lets it in). */
+    uint32_t resume_eip;
 } rc_cpu;
 
 /* EFLAGS as the guest sees it (pushfd, lahf). */

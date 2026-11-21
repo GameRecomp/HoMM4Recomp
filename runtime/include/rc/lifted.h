@@ -24,6 +24,21 @@ typedef void (*rc_fn)(rc_cpu *c);
 
 /* Call the guest function at `target` (lifted code or an import). */
 void rc_dispatch(rc_cpu *c, uint32_t target);
+/* An indirect jump. While an exception is dispatched, one that moves the stack above the
+ * RaiseException is the handler continuing in an outer frame: it starts the unwinding instead. */
+void rc_dispatch_jump(rc_cpu *c, uint32_t target);
+/* After a call returned with c->unwind set: if this frame (its ebp; its code [lo, hi), or one of
+ * the `n` places `at` outside it) is where the exception continues, run the continuation, which
+ * ends with this function's return. The caller returns either way. */
+void rc_unwind_claim(rc_cpu *c, uint32_t ebp, uint32_t lo, uint32_t hi, const uint32_t *at, uint32_t n);
+/* An __except block entered during an exception (called by __except_handler3): unwind to its
+ * frame (the current ebp) and continue there. */
+void rc_unwind_begin(rc_cpu *c, uint32_t eip);
+#if defined(__GNUC__) || defined(__clang__)
+#define RC_UNWINDING(c) __builtin_expect((c)->unwind != 0, 0)
+#else
+#define RC_UNWINDING(c) ((c)->unwind != 0)
+#endif
 
 /* Stop: an instruction that cannot continue, or one the lifter does not
  * model. The registers are in `c`. */
