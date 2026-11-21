@@ -36,6 +36,24 @@ static void k_CoRegisterMessageFilter(rc_cpu *c)
     RC_RETURN(c, S_OK, 2);
 }
 static void k_CoFreeUnusedLibraries(rc_cpu *c) { RC_RETURN(c, 0, 0); }
+/* Objects shared with other programs, drag and drop between programs, the OLE clipboard: there
+ * are no other programs here. */
+static void k_CoLockObjectExternal(rc_cpu *c) { RC_RETURN(c, S_OK, 3); }
+static void k_RegisterDragDrop(rc_cpu *c) { RC_RETURN(c, S_OK, 2); }
+static void k_RevokeDragDrop(rc_cpu *c) { RC_RETURN(c, S_OK, 1); }
+static void k_CoRevokeClassObject(rc_cpu *c) { RC_RETURN(c, S_OK, 1); }
+static void k_OleFlushClipboard(rc_cpu *c) { RC_RETURN(c, S_OK, 0); }
+static void k_OleIsCurrentClipboard(rc_cpu *c) { RC_RETURN(c, 1 /* S_FALSE */, 1); }
+/* CoGetClassObject(clsid, context, info, iid, out): no class factories of servers. */
+static void k_CoGetClassObject(rc_cpu *c)
+{
+    if (RC_ARG(c, 4)) {
+        rc_st32(RC_ARG(c, 4), 0);
+    }
+    RC_RETURN(c, REGDB_E_CLASSNOTREG, 5);
+}
+/* CLSIDFromProgID(name, clsid): no registered servers. */
+static void k_CLSIDFromProgID(rc_cpu *c) { RC_RETURN(c, 0x800401f3u /* CO_E_CLASSSTRING */, 2); }
 /* CoTaskMemAlloc(size), CoTaskMemFree(p): the heap. */
 static void k_CoTaskMemAlloc(rc_cpu *c) { RC_RETURN(c, rc_heap_alloc(RC_ARG(c, 0) ? RC_ARG(c, 0) : 1, false), 1); }
 static void k_CoTaskMemFree(rc_cpu *c)
@@ -116,6 +134,14 @@ const rc_import_def rc_ole32_defs[] = {
     {OLE, "OleUninitialize", k_OleUninitialize},
     {OLE, "CoRegisterMessageFilter", k_CoRegisterMessageFilter},
     {OLE, "CoFreeUnusedLibraries", k_CoFreeUnusedLibraries},
+    {OLE, "CoLockObjectExternal", k_CoLockObjectExternal},
+    {OLE, "RegisterDragDrop", k_RegisterDragDrop},
+    {OLE, "RevokeDragDrop", k_RevokeDragDrop},
+    {OLE, "CoRevokeClassObject", k_CoRevokeClassObject},
+    {OLE, "OleFlushClipboard", k_OleFlushClipboard},
+    {OLE, "OleIsCurrentClipboard", k_OleIsCurrentClipboard},
+    {OLE, "CoGetClassObject", k_CoGetClassObject},
+    {OLE, "CLSIDFromProgID", k_CLSIDFromProgID},
     {OLE, "CoTaskMemAlloc", k_CoTaskMemAlloc},
     {OLE, "CoTaskMemFree", k_CoTaskMemFree},
     {OLE, "CoUninitialize", k_CoUninitialize},

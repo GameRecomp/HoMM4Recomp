@@ -837,6 +837,263 @@ static void k_DllGetVersion(rc_cpu *c)
     RC_RETURN(c, 0, 1);
 }
 
+/* ---- tab control ---- */
+
+#define TABS 32
+typedef struct tabctl {
+    struct {
+        char *text;
+        uint32_t param;
+        int32_t image;
+    } item[TABS];
+    int n, sel;
+    uint32_t images;
+    int32_t width[TABS]; /* computed when painting or measuring */
+} tabctl;
+
+#define TCN_SELCHANGE 0xfffffdd9u   /* -551 */
+#define TCN_SELCHANGING 0xfffffdd8u /* -552 */
+
+static int32_t tab_height(rc_cpu *c, uint32_t hwnd) { return font_h(c, hwnd) + 8; }
+
+/* The rectangle of tab `i` (client coordinates): one row from the left. */
+static rc_rect tab_rect(rc_cpu *c, uint32_t hwnd, tabctl *t, int i)
+{
+    uint32_t hdc;
+    rc_dc *d = paint_dc(c, hwnd, &hdc);
+    int32_t x = 2, h = tab_height(c, hwnd);
+    rc_rect r = {0, 0, 0, 0};
+    for (int k = 0; k < t->n && k <= i; k++) {
+        int32_t w = 16;
+        if (d && t->item[k].text) {
+            rc_rect m = {0, 0, 0, 0};
+            rc_draw_text(d, t->item[k].text, -1, &m, 0x420 /* CALCRECT SINGLELINE */);
+            w = m.r - m.l + 12;
+        }
+        t->width[k] = w;
+        r = (rc_rect){x, 2, x + w, 2 + h};
+        x += w;
+    }
+    rc_wnd_release_dc(hdc);
+    return r;
+}
+
+static uint32_t tab_notify(rc_cpu *c, uint32_t hwnd, uint32_t code)
+{
+    uint32_t parent = rc_wnd_parent(hwnd);
+    if (!parent) {
+        return 0;
+    }
+    uint32_t nm = rc_heap_alloc(12, false);
+    rc_st32(nm, hwnd);
+    rc_st32(nm + 4, rc_wnd_id(hwnd));
+    rc_st32(nm + 8, code);
+    uint32_t r = rc_wnd_send(c, parent, 0x004e /* WM_NOTIFY */, rc_wnd_id(hwnd), nm);
+    rc_heap_free(nm);
+    return r;
+}
+
+static void tab_paint(rc_cpu *c, uint32_t hwnd, tabctl *t)
+{
+    uint32_t hdc;
+    rc_dc *d = paint_dc(c, hwnd, &hdc);
+    if (!d) {
+        return;
+    }
+    rc_rect r = rc_wnd_client(hwnd);
+    int32_t h = tab_height(c, hwnd);
+    rc_dc_fill(d, r, rc_sys_color(15));
+    rc_draw_edge(d, (rc_rect){0, h + 1, r.r, r.b}, 0x5 /* EDGE_RAISED */, 0xf);
+    for (int i = 0; i < t->n; i++) {
+        rc_rect tr = tab_rect(c, hwnd, t, i);
+        if (i == t->sel) {
+            tr.l -= 2;
+            tr.r += 2;
+            tr.t -= 2;
+            tr.b += 2;
+        }
+        rc_dc_fill(d, tr, rc_sys_color(15));
+        rc_draw_edge(d, tr, 0x5, 0x1 | 0x2 | 0x4 /* left top right */);
+        if (t->item[i].text) {
+            rc_draw_text(d, t->item[i].text, -1, &tr, 0x25 /* CENTER VCENTER SINGLELINE */);
+        }
+    }
+    rc_wnd_release_dc(hdc);
+}
+
+static void tab_set_item(tabctl *t, int i, uint32_t item)
+{
+    uint32_t mask = rc_ld32(item);
+    if (mask & 1) { /* TCIF_TEXT */
+        free(t->item[i].text);
+        uint32_t s = rc_ld32(item + 12);
+        t->item[i].text = strdup(s ? rc_str(s) : "");
+    }
+    if (mask & 2) { /* TCIF_IMAGE */
+        t->item[i].image = (int32_t)rc_ld32(item + 20);
+    }
+    if (mask & 8) { /* TCIF_PARAM */
+        t->item[i].param = rc_ld32(item + 24);
+    }
+}
+
+static void wp_tab(rc_cpu *c)
+{
+    uint32_t hwnd = RC_ARG(c, 0), msg = RC_ARG(c, 1), wp = RC_ARG(c, 2), lp = RC_ARG(c, 3);
+    tabctl *t = data_of(hwnd, sizeof *t);
+    switch (msg) {
+    case WM_PAINT:
+        tab_paint(c, hwnd, t);
+        RET(0);
+    case WM_ERASEBKGND:
+        RET(1);
+    case WM_DESTROY:
+        for (int i = 0; i < t->n; i++) {
+            free(t->item[i].text);
+        }
+        free(t);
+        rc_wnd_set_data(hwnd, NULL);
+        RET(0);
+    case WM_LBUTTONDOWN: {
+        int32_t x = (int16_t)(lp & 0xffff), y = (int16_t)(lp >> 16);
+        for (int i = 0; i < t->n; i++) {
+            rc_rect r = tab_rect(c, hwnd, t, i);
+            if (x >= r.l && x < r.r && y >= r.t && y < r.b && i != t->sel) {
+                if (tab_notify(c, hwnd, TCN_SELCHANGING)) {
+                    break; /* the parent keeps the current tab */
+                }
+                t->sel = i;
+                rc_wnd_invalidate(hwnd, NULL, true);
+                tab_notify(c, hwnd, TCN_SELCHANGE);
+                break;
+            }
+        }
+        RET(0);
+    }
+    case 0x1302: RET(t->images);                             /* TCM_GETIMAGELIST */
+    case 0x1303: { uint32_t o = t->images; t->images = lp; RET(o); } /* TCM_SETIMAGELIST */
+    case 0x1304: RET((uint32_t)t->n);                        /* TCM_GETITEMCOUNT */
+    case 0x1305: {                                           /* TCM_GETITEMA(i, item) */
+        if ((int)wp >= t->n || !lp) {
+            RET(0);
+        }
+        uint32_t mask = rc_ld32(lp);
+        if ((mask & 1) && rc_ld32(lp + 12)) {
+            rc_put_str(rc_ld32(lp + 12), rc_ld32(lp + 16), t->item[wp].text ? t->item[wp].text : "");
+        }
+        if (mask & 2) {
+            rc_st32(lp + 20, (uint32_t)t->item[wp].image);
+        }
+        if (mask & 8) {
+            rc_st32(lp + 24, t->item[wp].param);
+        }
+        RET(1);
+    }
+    case 0x1306:                                             /* TCM_SETITEMA(i, item) */
+        if ((int)wp >= t->n || !lp) {
+            RET(0);
+        }
+        tab_set_item(t, (int)wp, lp);
+        rc_wnd_invalidate(hwnd, NULL, true);
+        RET(1);
+    case 0x1307: {                                           /* TCM_INSERTITEMA(i, item) */
+        if (t->n == TABS || !lp) {
+            RET(0xffffffffu);
+        }
+        int i = (int)wp > t->n ? t->n : (int)wp;
+        memmove(&t->item[i + 1], &t->item[i], sizeof t->item[0] * (size_t)(t->n - i));
+        memset(&t->item[i], 0, sizeof t->item[i]);
+        t->item[i].image = -1;
+        t->n++;
+        tab_set_item(t, i, lp);
+        if (t->n == 1) {
+            t->sel = 0;
+        } else if (i <= t->sel) {
+            t->sel++;
+        }
+        rc_wnd_invalidate(hwnd, NULL, true);
+        RET((uint32_t)i);
+    }
+    case 0x1308:                                             /* TCM_DELETEITEM(i) */
+        if ((int)wp >= t->n) {
+            RET(0);
+        }
+        free(t->item[wp].text);
+        memmove(&t->item[wp], &t->item[wp + 1], sizeof t->item[0] * (size_t)(t->n - (int)wp - 1));
+        t->n--;
+        if (t->sel >= t->n) {
+            t->sel = t->n - 1;
+        }
+        rc_wnd_invalidate(hwnd, NULL, true);
+        RET(1);
+    case 0x1309:                                             /* TCM_DELETEALLITEMS */
+        for (int i = 0; i < t->n; i++) {
+            free(t->item[i].text);
+        }
+        t->n = 0;
+        t->sel = -1;
+        rc_wnd_invalidate(hwnd, NULL, true);
+        RET(1);
+    case 0x130a: {                                           /* TCM_GETITEMRECT(i, rect) */
+        if ((int)wp >= t->n || !lp) {
+            RET(0);
+        }
+        rc_rect r = tab_rect(c, hwnd, t, (int)wp);
+        rc_st32(lp, (uint32_t)r.l);
+        rc_st32(lp + 4, (uint32_t)r.t);
+        rc_st32(lp + 8, (uint32_t)r.r);
+        rc_st32(lp + 12, (uint32_t)r.b);
+        RET(1);
+    }
+    case 0x130b: RET((uint32_t)t->sel);                      /* TCM_GETCURSEL */
+    case 0x132f: RET((uint32_t)t->sel);                      /* TCM_GETCURFOCUS */
+    case 0x130c:                                             /* TCM_SETCURSEL(i) */
+    case 0x1330: {                                           /* TCM_SETCURFOCUS(i) */
+        int old = t->sel;
+        if ((int)wp < t->n) {
+            t->sel = (int)wp;
+            rc_wnd_invalidate(hwnd, NULL, true);
+        }
+        RET((uint32_t)old);
+    }
+    case 0x130d: {                                           /* TCM_HITTEST(0, info) */
+        if (!lp) {
+            RET(0xffffffffu);
+        }
+        int32_t x = (int32_t)rc_ld32(lp), y = (int32_t)rc_ld32(lp + 4);
+        for (int i = 0; i < t->n; i++) {
+            rc_rect r = tab_rect(c, hwnd, t, i);
+            if (x >= r.l && x < r.r && y >= r.t && y < r.b) {
+                rc_st32(lp + 8, 6); /* TCHT_ONITEM */
+                RET((uint32_t)i);
+            }
+        }
+        rc_st32(lp + 8, 1); /* TCHT_NOWHERE */
+        RET(0xffffffffu);
+    }
+    case 0x1328: {                                           /* TCM_ADJUSTRECT(larger, rect) */
+        int32_t h = tab_height(c, hwnd) + 4;
+        if (lp) {
+            int32_t d = wp ? -1 : 1;
+            rc_st32(lp, rc_ld32(lp) + (uint32_t)(2 * d));
+            rc_st32(lp + 4, rc_ld32(lp + 4) + (uint32_t)(h * d));
+            rc_st32(lp + 8, rc_ld32(lp + 8) - (uint32_t)(2 * d));
+            rc_st32(lp + 12, rc_ld32(lp + 12) - (uint32_t)(2 * d));
+        }
+        RET(0);
+    }
+    case 0x132c: RET(1);                                     /* TCM_GETROWCOUNT */
+    case 0x130e:                                             /* TCM_SETITEMEXTRA */
+    case 0x1329:                                             /* TCM_SETITEMSIZE */
+    case 0x132b:                                             /* TCM_SETPADDING */
+    case 0x1331:                                             /* TCM_SETMINTABWIDTH */
+    case 0x132d:                                             /* TCM_GETTOOLTIPS */
+        RET(0);
+    default:
+        RET(rc_def_window_proc(c, hwnd, msg, wp, lp));
+    }
+}
+
 static const rc_import_def defs[] = {
     {CC, "DllGetVersion", k_DllGetVersion},
     {CC, "#17", k_InitCommonControls},
@@ -858,4 +1115,5 @@ void rc_comctl32_init(void)
     rc_class_builtin("msctls_trackbar32", 0x8, wp_trackbar, 8, 0, arrow);
     rc_class_builtin("tooltips_class32", 0x8, wp_tooltips, 8, 0, arrow);
     rc_class_builtin("ToolbarWindow32", 0x8, wp_toolbar, 8, 0, arrow);
+    rc_class_builtin("SysTabControl32", 0x8, wp_tab, 8, 0, arrow);
 }

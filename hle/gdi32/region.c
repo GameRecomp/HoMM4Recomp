@@ -250,6 +250,111 @@ static void k_GetRgnBox(rc_cpu *c)
     RC_RETURN(c, kind_of(&o->rgn), 2);
 }
 
+/* GetRegionData(region, size, data): RGNDATAHEADER (size 32, RDH_RECTANGLES, count, bytes of
+ * rectangles, bounds) and the rectangles; the size needed when data is NULL or too small. */
+static void k_GetRegionData(rc_cpu *c)
+{
+    gobj *o = rc_gobj_get(RC_ARG(c, 0), OB_REGION);
+    uint32_t size = RC_ARG(c, 1), p = RC_ARG(c, 2);
+    if (!o) {
+        RC_RETURN(c, 0, 3);
+    }
+    uint32_t need = 32 + 16 * (uint32_t)o->rgn.n;
+    if (!p || size < need) {
+        RC_RETURN(c, need, 3);
+    }
+    rc_st32(p, 32);
+    rc_st32(p + 4, 1);
+    rc_st32(p + 8, (uint32_t)o->rgn.n);
+    rc_st32(p + 12, 16 * (uint32_t)o->rgn.n);
+    put_rect(p + 16, rc_rgn_box(&o->rgn));
+    for (int i = 0; i < o->rgn.n; i++) {
+        put_rect(p + 32 + 16 * (uint32_t)i, o->rgn.r[i]);
+    }
+    RC_RETURN(c, need, 3);
+}
+
+/* FillRgn(dc, region, brush) */
+static void k_FillRgn(rc_cpu *c)
+{
+    rc_dc *d = rc_dc_get(RC_ARG(c, 0));
+    gobj *o = rc_gobj_get(RC_ARG(c, 1), OB_REGION);
+    if (!d || !o) {
+        RC_RETURN(c, 0, 3);
+    }
+    for (int i = 0; i < o->rgn.n; i++) {
+        rc_rect r = o->rgn.r[i];
+        r = (rc_rect){rc_dc_x(d, r.l), rc_dc_y(d, r.t), rc_dc_x(d, r.r), rc_dc_y(d, r.b)};
+        rc_dc_pat(d, r, RC_ARG(c, 2), 0x00f00021u); /* PATCOPY */
+    }
+    RC_RETURN(c, 1, 3);
+}
+
+/* CreatePolygonRgn(points, count, mode): scan lines (even-odd or winding), runs of equal lines
+ * merged into rectangles. */
+static void k_CreatePolygonRgn(rc_cpu *c)
+{
+    uint32_t pts = RC_ARG(c, 0), n = RC_ARG(c, 1), winding = RC_ARG(c, 2) == 2;
+    uint32_t h = rc_gobj_new(OB_REGION);
+    gobj *o = rc_gobj_get(h, OB_REGION);
+    rc_rgn_empty(&o->rgn);
+    if (n < 3 || n > 1024) {
+        RC_RETURN(c, h, 3);
+    }
+    int32_t ymin = INT32_MAX, ymax = INT32_MIN;
+    for (uint32_t i = 0; i < n; i++) {
+        int32_t y = (int32_t)rc_ld32(pts + 8 * i + 4);
+        ymin = y < ymin ? y : ymin;
+        ymax = y > ymax ? y : ymax;
+    }
+    int32_t prev[64], np = 0, run_top = ymin;
+    for (int32_t y = ymin; y <= ymax; y++) {
+        /* crossings of the line through the middle of row y */
+        int32_t xs[64];
+        int dir[64];
+        int k = 0;
+        for (uint32_t i = 0; i < n && k < 64; i++) {
+            int32_t x0 = (int32_t)rc_ld32(pts + 8 * i), y0 = (int32_t)rc_ld32(pts + 8 * i + 4);
+            uint32_t j = (i + 1) % n;
+            int32_t x1 = (int32_t)rc_ld32(pts + 8 * j), y1 = (int32_t)rc_ld32(pts + 8 * j + 4);
+            if ((y0 <= y && y1 > y) || (y1 <= y && y0 > y)) {
+                xs[k] = x0 + (int32_t)((int64_t)(x1 - x0) * (y - y0) / (y1 - y0));
+                dir[k++] = y1 > y0 ? 1 : -1;
+            }
+        }
+        for (int a = 1; a < k; a++) { /* sort by x */
+            for (int b = a; b > 0 && xs[b] < xs[b - 1]; b--) {
+                int32_t t = xs[b]; xs[b] = xs[b - 1]; xs[b - 1] = t;
+                int td = dir[b]; dir[b] = dir[b - 1]; dir[b - 1] = td;
+            }
+        }
+        int32_t spans[64];
+        int ns = 0, w = 0;
+        for (int a = 0; a + 1 < k + 1 && a < k; a++) {
+            int before = w;
+            w += winding ? dir[a] : 1;
+            bool inside = winding ? w != 0 : (w & 1);
+            bool was = winding ? before != 0 : (before & 1);
+            if (inside && !was && ns < 63) {
+                spans[ns++] = xs[a];
+            } else if (!inside && was && ns < 64) {
+                spans[ns++] = xs[a];
+            }
+        }
+        ns &= ~1;
+        bool same = ns == np && memcmp(spans, prev, sizeof spans[0] * (size_t)ns) == 0;
+        if (!same || y == ymax) {
+            for (int a = 0; a + 1 < np; a += 2) {
+                rc_rgn_add_rect(&o->rgn, (rc_rect){prev[a], run_top, prev[a + 1], y});
+            }
+            memcpy(prev, spans, sizeof spans[0] * (size_t)ns);
+            np = ns;
+            run_top = y;
+        }
+    }
+    RC_RETURN(c, h, 3);
+}
+
 static void k_PtInRegion(rc_cpu *c)
 {
     gobj *o = rc_gobj_get(RC_ARG(c, 0), OB_REGION);
@@ -448,6 +553,9 @@ const rc_import_def rc_gdi32_region[] = {
     {G32, "CombineRgn", k_CombineRgn},
     {G32, "OffsetRgn", k_OffsetRgn},
     {G32, "GetRgnBox", k_GetRgnBox},
+    {G32, "GetRegionData", k_GetRegionData},
+    {G32, "FillRgn", k_FillRgn},
+    {G32, "CreatePolygonRgn", k_CreatePolygonRgn},
     {G32, "PtInRegion", k_PtInRegion},
     {G32, "RectInRegion", k_RectInRegion},
     {G32, "SelectClipRgn", k_SelectClipRgn},
