@@ -55,6 +55,10 @@ typedef struct object {
     uint32_t feed;             /* the next byte to feed */
     rc_pcm *pcm;
     uint32_t pcm_rate;
+    /* With the virtual clock (RC_CLOCK=virtual), how much has played follows that clock, not
+     * the audio device, so that a run repeats exactly: bytes put since `vstart` (ms). */
+    uint64_t vstart;
+    uint32_t vput;
 } object;
 
 /* A buffer per sample: the C2-engine games create well over a thousand. */
@@ -130,6 +134,40 @@ static float gain_of(int32_t volume)
     return volume <= -10000 ? 0.0f : powf(10.0f, (float)volume / 2000.0f);
 }
 
+/* What of a buffer's stream has not played yet. */
+static uint32_t queued_of(object *b)
+{
+    if (!b->pcm) {
+        return 0;
+    }
+    if (!rc_clock_virtual()) {
+        return rc_pcm_queued(b->pcm);
+    }
+    uint64_t now = rc_ticks_peek_ms();
+    uint64_t bps = (uint64_t)rate_of(b) * b->align;
+    uint64_t played = (now - b->vstart) * bps / 1000;
+    if (played >= b->vput) {
+        /* ran dry: what comes next starts playing now */
+        b->vstart = now;
+        b->vput = 0;
+        return 0;
+    }
+    return b->vput - (uint32_t)played;
+}
+
+static void put_pcm(object *b, const void *data, uint32_t n)
+{
+    rc_pcm_put(b->pcm, data, n);
+    b->vput += n;
+}
+
+static void clear_pcm(object *b)
+{
+    rc_pcm_clear(b->pcm);
+    b->vstart = rc_ticks_peek_ms();
+    b->vput = 0;
+}
+
 /* Keep about 80 ms of a playing buffer queued in its stream. */
 static void feed(object *b)
 {
@@ -138,13 +176,13 @@ static void feed(object *b)
     }
     uint32_t want = rate_of(b) * b->align * 80 / 1000;
     want -= want % b->align;
-    uint32_t queued = rc_pcm_queued(b->pcm);
+    uint32_t queued = queued_of(b);
     while (queued < want) {
         uint32_t n = want - queued;
         if (n > b->size - b->feed) {
             n = b->size - b->feed;
         }
-        rc_pcm_put(b->pcm, rc_ptr(b->data + b->feed), n);
+        put_pcm(b, rc_ptr(b->data + b->feed), n);
         queued += n;
         b->feed += n;
         if (b->feed >= b->size) {
@@ -173,11 +211,11 @@ static uint32_t play_cursor(object *b)
     if (!b->pcm || !b->size) {
         return 0;
     }
-    uint32_t q = rc_pcm_queued(b->pcm) % b->size;
+    uint32_t q = queued_of(b) % b->size;
     return (b->feed + b->size - q) % b->size;
 }
 
-static bool sounding(object *b) { return b->playing || (b->pcm && rc_pcm_queued(b->pcm) > 0); }
+static bool sounding(object *b) { return b->playing || queued_of(b) > 0; }
 
 /* ---- IDirectSound ---- */
 
@@ -444,7 +482,7 @@ static void b_Stop(rc_cpu *c)
     if (b->pcm) {
         /* What is queued has not played: the position goes back to where playback is. */
         b->feed = play_cursor(b);
-        rc_pcm_clear(b->pcm);
+        clear_pcm(b);
     }
     b->playing = false;
     RC_RETURN(c, DS_OK, 1);
@@ -457,7 +495,7 @@ static void b_SetCurrentPosition(rc_cpu *c)
         b->feed = (RC_ARG(c, 1) % b->size) / b->align * b->align;
     }
     if (b->pcm) {
-        rc_pcm_clear(b->pcm);
+        clear_pcm(b);
     }
     feed(b);
     RC_RETURN(c, DS_OK, 2);
