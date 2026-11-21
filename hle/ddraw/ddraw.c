@@ -489,9 +489,21 @@ static uint64_t pending_since;
  * processor rests meanwhile; so the program also makes no more passes, and
  * draws no more pictures, than are shown. Not on the virtual clock, whose
  * runs are to repeat exactly. */
+static uint64_t presented_at; /* when present() last ran */
+static void present(void);
+
+/* An idle frame: a program that copies to the screen only what changed (Heroes IV in its menus)
+ * may present nothing for long stretches, while scripted runs, screenshots and the frame hook
+ * count presented frames. With nothing presented for IDLE_FRAME_MS, the screen as it is counts
+ * as a frame of its own. */
+#define IDLE_FRAME_MS 50
+
 static void flush(rc_cpu *c)
 {
     (void)c;
+    if (display.primary && rc_ticks_peek_ms() - presented_at >= IDLE_FRAME_MS) {
+        present();
+    }
     if (!pending || !display.primary) {
         return;
     }
@@ -514,6 +526,7 @@ static void present(void)
     frames++;
     rc_thread_work();
     uint64_t now = rc_ticks_peek_ms();
+    presented_at = now;
     if (!pending) {
         pending_since = now;
     }
