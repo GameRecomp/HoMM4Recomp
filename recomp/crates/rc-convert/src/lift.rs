@@ -133,6 +133,79 @@ pub fn label_entries(map: &CodeMap) -> Vec<(u32, &Function)> {
         .collect()
 }
 
+/// The `__except` blocks of the binary: the handlers of SEH scope-table entries that have a
+/// filter (an entry without one is a `__finally` block, which returns). `__except_handler3`
+/// calls such a block, and the block continues in its own function's frame: entered during an
+/// exception, it unwinds the lifted functions to that frame first (rc_unwind_begin).
+pub fn except_blocks(l: &Loaded) -> BTreeMap<u32, u32> {
+    let mut out = BTreeMap::new();
+    for t in &l.map.seh_scope_tables {
+        for i in 0..t.entries {
+            let e = t.table.0 + 12 * i;
+            let (filter, handler) = (l.image.dword(e + 4), l.image.dword(e + 8));
+            if let (Some(f @ 1..), Some(h @ 1..)) = (filter, handler) {
+                let _ = f;
+                out.insert(h, t.frame.0);
+            }
+        }
+    }
+    out
+}
+
+/// Where an exception may continue inside a function's frame: the `__except` blocks of its SEH
+/// frame, and the continuations its C++ catch blocks return (a catch funclet ends by loading the
+/// address to continue at into eax). Each place with the address of the instruction that set up
+/// the frame (the SEH `push -1`, or the `push` of the C++ frame handler stub), by which the
+/// lifted function that owns the frame, and every entry into its body, finds it.
+pub fn continuations(l: &Loaded) -> BTreeMap<u32, u32> {
+    let img = &l.image;
+    let d = |a: u32| img.dword(a).unwrap_or(0);
+    let mut out: BTreeMap<u32, u32> = except_blocks(l);
+    let funcinfos: BTreeSet<u32> = l.map.eh_funcinfo.iter().map(|v| v.0).collect();
+    let by_entry: BTreeMap<u32, &Function> =
+        l.map.functions.iter().map(|f| (f.entry.0, f)).collect();
+    // FuncInfo -> the continuations of its catch blocks.
+    let mut of_funcinfo: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for &fi in &funcinfos {
+        let (ntry, tries) = (d(fi + 12).min(1024), d(fi + 16));
+        let mut conts = Vec::new();
+        for t in 0..ntry {
+            let e = tries + 20 * t;
+            let (nc, hs) = (d(e + 12).min(256), d(e + 16));
+            for c in 0..nc {
+                let Some(funclet) = by_entry.get(&d(hs + 16 * c + 12)) else {
+                    continue;
+                };
+                for &a in &funclet.body {
+                    // mov eax, imm32 with a code address
+                    if img.byte(a) == Some(0xb8) && img.is_exec(d(a + 1)) {
+                        conts.push(d(a + 1));
+                    }
+                }
+            }
+        }
+        of_funcinfo.insert(fi, conts);
+    }
+    // The functions that push a frame handler stub (mov eax, FuncInfo; jmp __CxxFrameHandler).
+    for f in &l.map.functions {
+        for &a in &f.body {
+            if img.byte(a) != Some(0x68) {
+                continue;
+            }
+            let stub = d(a + 1);
+            if img.byte(stub) != Some(0xb8) || img.byte(stub + 5) != Some(0xe9) {
+                continue;
+            }
+            if let Some(conts) = of_funcinfo.get(&d(stub + 1)) {
+                for &c in conts {
+                    out.entry(c).or_insert(a);
+                }
+            }
+        }
+    }
+    out
+}
+
 pub struct Lifted {
     pub functions: Vec<rc_ir::Function>,
     pub label_entries: usize,

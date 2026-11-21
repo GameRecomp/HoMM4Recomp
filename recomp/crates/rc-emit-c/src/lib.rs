@@ -39,12 +39,26 @@ pub trait Program {
     fn name(&self, addr: u32) -> String;
     /// Whether `addr` is a function entry.
     fn is_entry(&self, addr: u32) -> bool;
+    /// Whether the function at `addr` is an `__except` block (see `Entries::except_blocks`).
+    fn is_except_block(&self, _addr: u32) -> bool {
+        false
+    }
+    /// The places outside `f`'s own code where an exception continues in its frame.
+    fn continuations_of(&self, _f: &Function) -> Vec<u32> {
+        Vec::new()
+    }
 }
 
 /// Names functions `<prefix>XXXXXXXX`.
 #[derive(Debug, Clone)]
 pub struct Entries {
     pub prefix: String,
+    /// `__except` blocks (rc_convert::lift::except_blocks): entered during an exception, a block
+    /// starts the unwinding to its frame instead of running.
+    pub except_blocks: BTreeSet<u32>,
+    /// Where exceptions continue (rc_convert::lift::continuations), each with the instruction
+    /// that set up its frame: the function holding that instruction takes the place over.
+    pub continuations: BTreeMap<u32, u32>,
     pub entries: BTreeSet<u32>,
 }
 
@@ -54,6 +68,17 @@ impl Program for Entries {
     }
     fn is_entry(&self, addr: u32) -> bool {
         self.entries.contains(&addr)
+    }
+    fn is_except_block(&self, addr: u32) -> bool {
+        self.except_blocks.contains(&addr)
+    }
+    fn continuations_of(&self, f: &Function) -> Vec<u32> {
+        let own: BTreeSet<u32> = f.insns.iter().map(|i| i.addr).collect();
+        self.continuations
+            .iter()
+            .filter(|(_, frame)| own.contains(frame))
+            .map(|(b, _)| *b)
+            .collect()
     }
 }
 
@@ -487,11 +512,47 @@ struct Emitter<'a> {
     used_labels: BTreeSet<u32>,
     out: String,
     depth: usize,
+    /// Where an exception may continue in this function's frame (`compute_unwind_range`), and
+    /// the places outside that span (`Program::continuations_of`).
+    unwind_range: (u32, u32),
+    continuations: Vec<u32>,
 }
 
 impl Emitter<'_> {
     /// Registers back from `c` after a call, and the flags with
     /// `flags_at_return` (the C compiler drops the loads nothing reads).
+    /// After a call: while an exception unwinds, return (after letting this frame take the
+    /// continuation if it is the one: same ebp, a place in this function's code).
+    fn unwind_check(&self) -> String {
+        let (lo, hi) = self.unwind_range;
+        if self.continuations.is_empty() {
+            format!("if (RC_UNWINDING(c)) {{ rc_unwind_claim(c, ebp, {lo:#x}u, {hi:#x}u, 0, 0); return; }} ")
+        } else {
+            let n = self.continuations.len();
+            format!("if (RC_UNWINDING(c)) {{ rc_unwind_claim(c, ebp, {lo:#x}u, {hi:#x}u, unwind_at_, {n}); return; }} ")
+        }
+    }
+
+    /// The code an exception may continue at in this function's frame: the span of its
+    /// instructions (and the places in `continuations`).
+    fn compute_unwind_range(&self) -> (u32, u32) {
+        let lo = self
+            .f
+            .insns
+            .iter()
+            .map(|i| i.addr)
+            .min()
+            .unwrap_or(self.f.addr);
+        let hi = self
+            .f
+            .insns
+            .iter()
+            .map(|i| i.addr + u32::from(i.len))
+            .max()
+            .unwrap_or(self.f.addr);
+        (lo, hi)
+    }
+
     fn reload_after_call(&self) -> String {
         if self.opts.flags_at_return {
             reload_all()
@@ -632,9 +693,10 @@ impl Emitter<'_> {
                 }
                 Term::Call { target, ret } => {
                     let l = format!(
-                        "esp -= 4; rc_st32m(m, esp, {ret:#x}u); {}{}(c); {}",
+                        "esp -= 4; rc_st32m(m, esp, {ret:#x}u); {}{}(c); {}{}",
                         spill_regs(),
                         self.p.name(*target),
+                        self.unwind_check(),
                         self.reload_after_call()
                     );
                     if self.p.is_entry(*target) {
@@ -651,9 +713,10 @@ impl Emitter<'_> {
                 }
                 Term::CallIndirect { target, ret } => {
                     let l = format!(
-                        "{{ uint32_t t_ = {}; esp -= 4; rc_st32m(m, esp, {ret:#x}u); {}rc_dispatch(c, t_); {}}}",
+                        "{{ uint32_t t_ = {}; esp -= 4; rc_st32m(m, esp, {ret:#x}u); {}rc_dispatch(c, t_); {}{}}}",
                         expr(target),
                         spill_regs(),
+                        self.unwind_check(),
                         self.reload_after_call()
                     );
                     self.line(&l);
@@ -670,7 +733,7 @@ impl Emitter<'_> {
                 }
                 Term::JumpIndirect(t) => {
                     let l = format!(
-                        "{{ uint32_t t_ = {}; {}rc_dispatch(c, t_); return; }}",
+                        "{{ uint32_t t_ = {}; {}rc_dispatch_jump(c, t_); return; }}",
                         expr(t),
                         spill_all()
                     );
@@ -728,6 +791,28 @@ impl Emitter<'_> {
             let _ = write!(self.out, " (void){n};");
         }
         self.out.push('\n');
+        if !self.continuations.is_empty() {
+            let list: Vec<String> = self
+                .continuations
+                .iter()
+                .map(|a| format!("{a:#x}u"))
+                .collect();
+            let _ = writeln!(
+                self.out,
+                "    static const uint32_t unwind_at_[] = {{{}}};\n    (void)unwind_at_;",
+                list.join(", ")
+            );
+        }
+        // An __except block runs in its function's frame: called by __except_handler3 during an
+        // exception, it first unwinds the lifted functions to that frame, which then enters it
+        // again (rc_unwind_claim sets resume_eip).
+        if self.p.is_except_block(f.addr) {
+            let _ = writeln!(
+                self.out,
+                "    if (c->resume_eip == {a:#x}u) {{ c->resume_eip = 0; }} else if (c->eh_depth) {{ rc_unwind_begin(c, {a:#x}u); return; }}",
+                a = f.addr
+            );
+        }
         // Entered elsewhere than at its lowest instruction: code below the
         // entry, or a second entry (a label) into the same body.
         if f.insns.first().is_some_and(|i| i.addr != f.addr) {
@@ -761,7 +846,10 @@ pub fn function(p: &dyn Program, f: &Function, opts: Options) -> String {
         used_labels: BTreeSet::new(),
         out: String::new(),
         depth: 0,
+        unwind_range: (0, 0),
+        continuations: p.continuations_of(f),
     };
+    e.unwind_range = e.compute_unwind_range();
     e.function(opts);
     e.out
 }
@@ -870,6 +958,8 @@ mod tests {
         };
         let p = Entries {
             prefix: "f_".into(),
+            except_blocks: BTreeSet::new(),
+            continuations: BTreeMap::new(),
             entries: [0x1001].into_iter().collect(),
         };
         let c = function(&p, &f, Options::default());
