@@ -7,13 +7,27 @@ here; disassembly, lifted or decompiled code never does.
 
 - Inno Setup 5.6.2 (u), title "Heroes of Might and Magic® 4 - Complete", 406 entries. All file data is in the
   external slice `…-1.bin` (1.05 GB); the `.exe` holds the setup loader and headers.
-- Neither CulturesRecomp's `rc-media` (Inno 5.5.0 (u), data in the exe) nor TropicoRecomp's `rc-inno` reads it
-  (M1). innoextract 1.9 lists and extracts it.
+- Neither CulturesRecomp's `rc-media` (Inno 5.5.0 (u), data in the exe) nor TropicoRecomp's `rc-inno` read it;
+  `rc-media` does now (M1), byte-identical to innoextract 1.9. What 5.6.2 changes against 5.5.0 in the setup
+  header: three more strings (setup mutex; ChangesEnvironment and ChangesAssociations, which became expressions),
+  and from 5.5.7 the image alpha format (1 byte) in place of the image back colour (4 bytes).
+- The slice file starts with `idska32\x1a` and its size (12 bytes); chunk offsets count from the start of the
+  slice file. Every data entry is its own stored chunk here.
+- GOG "Galaxy" layout: every file is installed as `{tmp}\xx\yy\<md5>`, a zlib stream of at most 10 MiB, and the
+  file entries' script calls say what it is: `before_install('<md5>', '<path>', <parts>)` on the first part of a
+  file, `after_install('<md5>', <stored size>, <size>)` on every part, the parts in order. Every part is a zlib
+  stream even when both sizes are equal. Paths use Pascal quotes (`''`). `heroes4.h4r` has 56 parts.
+- `check_if_install('de-DE#','32#64#','')` names the languages, architectures and Windows versions a file is for;
+  the German installer has one entry per destination except `goggame-1207658915.script` (four, by Windows
+  version).
 - Some entries are language-tagged (`[de-DE]`), and `goggame-1207658915.script` appears four times with OS
   constraints (Windows 8, 8.1, 10, other); only one is installed.
-- The game expects its registry key `HKLM\SOFTWARE\New World Computing\Heroes of Might and Magic IV\1.0`
-  (string in `Heroes4.exe`); what the installer writes there is **(open)** until `rc-media` reads the registry
-  section.
+- The installer's own `[Registry]` section writes only GOG keys. The game's keys come from GOG's post-install
+  script `goggame-1207658915.script` (JSON, `setRegistry` actions), which `rc-media` applies too:
+  `HKLM\Software\New World Computing\Heroes of Might and Magic IV\1.0` with `AppPath` = `{app}`, `CDDrive` =
+  `{drive:{app}}`, `Language` = `07` (German), `Version` = `3.0wow`, `GS` = `1`. Two more actions, only for
+  Windows 8 and later, set `full_screen` = 1 and `resolution` = 0x500 under HKCU; they are left out (the game's
+  own defaults apply). The script also names `{app}/games` as the save folder.
 
 ## Heroes4.exe
 
@@ -25,8 +39,14 @@ here; disassembly, lifted or decompiled code never does.
   start-up.
 - MSVC RTTI is present (`.?AV…@@` type descriptors, heavy template use: `t_script_action<…>`, `t_effect<…>`):
   vtables can be found through their complete object locators.
-- A linear sweep (objdump) shows only a handful of MMX/SSE/`cmov` instructions, probably data decoded as code;
-  to confirm from the code map (M2).
+- Discovery (M2): 62,636 functions, 3034 vtables (26,396 slots), 6600 C++ EH `FuncInfo`, 210 switch tables; 100 %
+  of `.text` classified. The code uses only integer and x87 instructions: no MMX, SSE or `cmov` (the linear sweep's
+  few hits were data). The space between functions is often filled with leftover bytes (instruction tails such as
+  a stray `ff 15 <iat>`) instead of `int3`: a discovery rule for it. One switch has an `fstp` between its `cmp` and
+  `ja`. The 52 indirect jumps left to run time are 46 vtable tail calls (`jmp [reg+n]`), and `jmp eax`/`jmp [ebx]`
+  in the CRT's EH and x87 helpers.
+- Lifting (M3): 63,293 functions, 1.84 million instructions, 344 MB of C in 87 files of up to 10 MB (one per 64 KiB
+  of guest code); the only traps are the CRT's 16 `int 6` (Pentium FDIV check stubs).
 
 ### Imports (197)
 
@@ -77,7 +97,9 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
 - `Mss32.dll`: Miles Sound System 6.1c, image base `0x21100000`; the same file CulturesRecomp replaces by HLE.
 - `Mp3dec.asi`: Miles' MP3 decoder provider, image base `0x26F00000`, imports kernel32 and mss32; contains MMX
   and **3DNow!** code paths (CPU detection). With `cpuid` reporting no 3DNow!, only the plain and MMX paths can
-  run.
+  run. Lifted, its 3DNow! instructions (`pfmul`, `pfadd`, `pfsub`, `pfsubr`, `pf2id`, `femms`: 738) are traps.
+- `binkw32.dll` and `Mp3dec.asi` are linked with the same CRT as CulturesRecomp's Bink builds: the same four
+  unreferenced x87 error stubs and the x87 argument-load helper need hints.
 
 ## Open questions
 

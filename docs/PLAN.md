@@ -71,9 +71,9 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 
 | #   | Milestone                         | Status | Exit criterion |
 |-----|-----------------------------------|--------|----------------|
-| M0  | Foundation                        | ⬜ | Shared code imported from CulturesRecomp and renamed; CMake and Cargo build; CI and audit hook; `games/heroes4/game.toml` pins the installer and every binary; `recomp identify` recognises them. |
-| M1  | Read the inputs                   | ⬜ | `recomp extract` unpacks the GOG installer with its `-1.bin` slice into `orig/heroes4/gog-de/`, byte-identical to innoextract, without third-party tools. The runtime loader maps `Heroes4.exe`. `--check` lists the missing imports. |
-| M2  | Find the code                     | ⬜ | Coverage report for `Heroes4.exe`, `binkw32.dll` (and `Mp3dec.asi` if lifted): 100 % classified, every leftover settled by analysis or a manifest hint, as in both sister projects. |
+| M0  | Foundation                        | ✅ | Shared code imported from CulturesRecomp and renamed; CMake and Cargo build; CI and audit hook; `games/heroes4/game.toml` pins the installer and every binary; `recomp identify` recognises them. |
+| M1  | Read the inputs                   | ✅ | `recomp extract` unpacks the GOG installer with its `-1.bin` slice into `orig/heroes4/gog-de/`, byte-identical to innoextract, without third-party tools. The runtime loader maps `Heroes4.exe`. `--check` lists the missing imports. |
+| M2  | Find the code                     | ✅ | Coverage report for `Heroes4.exe`, `binkw32.dll` (and `Mp3dec.asi` if lifted): 100 % classified, every leftover settled by analysis or a manifest hint, as in both sister projects. |
 | M3  | Lift and build                    | ⬜ | Every function lifts; no trap in reachable code; the generated C compiles warning-free (gcc, clang, MSVC in CI) and links into `homm4-heroes4`; build time and memory measured and acceptable (see "Build size"). |
 | M4  | Boot to the main loop             | ⬜ | CRT start-up, registry, archives, threads; the game creates its window and asks DirectDraw 7 for a mode. |
 | M5  | Picture and input                 | ⬜ | Intro movies (Bink) and the main menu render; mouse and keyboard work; windowed and full-screen. |
@@ -88,22 +88,22 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 
 ### M0 – Foundation
 
-- [ ] Copy from CulturesRecomp at a pinned commit (record it in the decision log): `recomp/` (all crates),
+- [x] Copy from CulturesRecomp at a pinned commit (record it in the decision log): `recomp/` (all crates),
       `runtime/`, `hle/`, `platform/`, `cmake/`, `third_party/`, `tools/`, `web/`, `android/`, `.github/`,
       `.clang-format`, `.editorconfig`, `.gitattributes`, `CMakePresets.json`, `CONTRIBUTING.md`
-- [ ] Remove what Heroes IV does not use from the build, without deleting shared modules that stay general:
-      the five Cultures game directories, their icons, the Cultures-only manifests; keep `dinput`, `dmusic`,
-      `dshow`, `dplay` in the tree (shared, unused) unless they cost build time
-- [ ] Rename: project `homm4recomp`, CLI help, window titles, user directory (`homm4recomp/<game>`), web page,
+- [x] Remove what Heroes IV does not use from the build, without deleting shared modules that stay general:
+      the five Cultures game directories, their icons, the Cultures-only manifests; `dinput`, `dmusic`,
+      `dshow`, `dplay` stay in the tree (shared, unused)
+- [x] Rename: project `homm4recomp`, CLI help, window titles, user directory (`homm4recomp/<game>`), web page,
       Android package id, AppImage names, release asset names (`HoMM4Recomp-converter-<system>-<arch>`)
-- [ ] `games/heroes4/game.toml`: the installer (both files), every binary with role and treatment (below),
+- [x] `games/heroes4/game.toml`: the installer (both files), every binary with role and treatment (below),
       `gog_id = "1207658915"`; `games/heroes4/CMakeLists.txt` → `rc_add_game(heroes4 …)` → `homm4-heroes4`
-- [ ] `docs/ARCHITECTURE.md`, `docs/WORKFLOWS.md`, `docs/DEVELOPMENT.md` adapted from CulturesRecomp
-- [ ] `tools/audit.sh`, `tools/hooks/` (pre-commit, commit-msg) enabled; `.gitignore` covers `orig/`,
+- [x] `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md` adapted from CulturesRecomp (`WORKFLOWS.md` with M12)
+- [x] `tools/audit.sh`, `tools/hooks/` (pre-commit, commit-msg) enabled; `.gitignore` covers `orig/`,
       `generated/`, `*.bin`, `*.h4r`, `*.h4c`, `*.h4s`, `*.bik`
-- [ ] CI green on Linux (audit, Rust fmt/clippy/test, C build and tests with the null platform); Windows and
-      macOS runners configured as in the sister projects
-- [ ] Icon (`tools/icons/heroes4.svg`, our own drawing, no game art)
+- [x] CI configuration as in the sister projects (audit, Rust fmt/clippy/test, C build and tests with the null
+      platform on Linux, Windows, macOS); the same steps pass locally on Linux (CI has not run: nothing pushed)
+- [x] Icon (`tools/icons/heroes4.svg`, our own drawing, no game art)
 
 Binary treatment (first proposal, see M2 and M6):
 
@@ -118,35 +118,37 @@ Binary treatment (first proposal, see M2 and M6):
 
 ### M1 – Read the inputs
 
-- [ ] `rc-media`: Inno Setup 5.6.2 (u): the header and entry layouts that differ from 5.5.0 (setup header
-      fields, file entry flags), checked against the innoextract source as a reference (behaviour only)
-- [ ] External data slices: `setup_….exe` + `setup_…-1.bin` (the `.bin` holds all file data, 1.05 GB);
+- [x] `rc-media`: Inno Setup 5.6.2 (u): three more header strings and the image alpha format in place of the
+      image back colour (RESEARCH); the entry layouts are unchanged
+- [x] External data slices: `setup_….exe` + `setup_…-1.bin` (the `.bin` holds all file data, 1.05 GB);
       `Archive` gets a "slice provider" so the CLI opens sibling files and the browser asks for both files
-- [ ] GOG language components: the German installer lists several language-tagged entries for the same path
-      (`goggame-*.script`, `[de-DE]` files); select by the manifest variant's language
-- [ ] Files installed twice (`binkw32.dll`, `Mss32.dll`, `Mp3dec.asi` in the root and in `Data/`): keep both,
+- [x] GOG Galaxy files: each file is stored as zlib parts in `{tmp}` and named by script calls; they are read
+      as the files they make. Language-tagged duplicates: the German installer has one entry per path except
+      the GOG script (four, by Windows version): the first is kept
+- [x] Files installed twice (`binkw32.dll`, `Mss32.dll`, `Mp3dec.asi` in the root and in `Data/`): keep both,
       as the installer does (same hash)
-- [ ] Installer registry entries → `registry-install.txt` (as for Cultures 2): the game reads
-      `HKLM\SOFTWARE\New World Computing\Heroes of Might and Magic IV\1.0`
-- [ ] Verified byte-identical against innoextract 1.9; ignored test `orig_extract` for `orig/`
-- [ ] Streaming: the `.bin` is read sequentially without holding it in memory (the browser has 1 GB in a `File`)
-- [ ] `homm4-heroes4 --check` loads `Heroes4.exe` and lists unimplemented imports (expected: those in RESEARCH)
+- [x] Installer registry entries → `registry-install.txt` (as for Cultures 2), with the `setRegistry` actions
+      of GOG's `goggame-1207658915.script`, which write the game's own key
+      `HKLM\Software\New World Computing\Heroes of Might and Magic IV\1.0`
+- [x] Verified byte-identical against innoextract 1.9; ignored test `orig_extract` for `orig/`
+- [x] Streaming: the `.bin` is read sequentially without holding it in memory (the browser has 1 GB in a `File`)
+- [x] `homm4-heroes4 --check` loads `Heroes4.exe` and lists unimplemented imports: 167 of 197 implemented, the
+      30 expected ones missing (RESEARCH)
 
 ### M2 – Find the code
 
-- [ ] Discovery on `Heroes4.exe` with the shared rules; note how long it takes (5.4 MiB, ~8 times Cultures 1)
-- [ ] RTTI: `Heroes4.exe` has MSVC RTTI (`.?AV…@@` type descriptors). Find vtables through the complete object
-      locators (the slot before each vtable points to a COL whose type descriptor is in `.data`) — a general
-      rule in `rc-discover`, more precise than the constructor-store heuristic C1 needed. Check it does not
-      change the result for the Cultures and Tropico binaries (run their tests against the copied crate)
-- [ ] C++ EH `FuncInfo` and SEH tables (MSVC 6), `switch` tables, x87 CRT second entries: shared rules; new
-      patterns become general rules, not per-address hints, where possible
-- [ ] `binkw32.dll` (this build) and `Mp3dec.asi`: discovery with their relocations, rebased to manifest bases
-      if they collide (`binkw32` prefers `0x10000000`, `Mp3dec.asi` `0x26F00000`, `Mss32` is HLE)
-- [ ] 100 % classified, no unknown byte; every `no-return?` candidate checked; ignored test `orig_discover`
-- [ ] CPU features used: the linear-sweep counts show almost no MMX/SSE in `Heroes4.exe` (likely data) — confirm
-      from the code map. `binkw32.dll` has MMX paths (lifted since Cultures M10); `Mp3dec.asi` has MMX and
-      **3DNow!** paths: `cpuid` must not report 3DNow! (extended leaf `0x80000001`), so those stay dead
+- [x] Discovery on `Heroes4.exe` with the shared rules: 99.96 % at once, 18 s
+- [x] Vtables: the shared constructor-store and pointer rules already find 3034 vtables (26,396 slots), every
+      byte is classified, so an RTTI rule was not needed (it may still help other games later)
+- [x] C++ EH `FuncInfo` and SEH tables (MSVC 6), `switch` tables, x87 CRT second entries: shared rules. Three new
+      general rules (alignment fill of leftover bytes, dead tails after no-return calls, x87 instructions between
+      `cmp` and `ja`), checked to change nothing on CulturesRecomp's binaries
+- [x] `binkw32.dll` (this build) and `Mp3dec.asi`: 100 % with and without their relocations; their bases do not
+      collide (`0x10000000`, `0x26F00000`; `Mss32` is HLE)
+- [x] 100 % classified, no unknown byte; every `no-return?` candidate checked; ignored test `orig_discover`
+- [x] CPU features: `Heroes4.exe` uses only integer and x87 code. `binkw32.dll` has MMX paths (lifted);
+      `Mp3dec.asi` has MMX and **3DNow!** paths, and the runtime's `cpuid` reports no extended leaves, so
+      3DNow! stays dead
 
 ### M3 – Lift and build
 
