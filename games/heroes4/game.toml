@@ -29,6 +29,13 @@ treatment = "lift"
 size = 7877375
 sha256 = "b6debc1c20065cdcef9524c856d1dba793d34368c786ba9c42eed7fa70a54a3b"
 variants = ["gog-de"]
+[binary.discover]
+seeds = [
+    0x0051ae60, # unreferenced function with a switch (an x87 store between its cmp and ja)
+    0x0051ba20, # unreferenced function with a switch
+]
+no_return = [0x008e2cc5] # CRT _exit: returns only for other callers of the shared doexit
+returns = [0x008e5aa5]   # CRT x87 argument load: returns; a second entry follows each call to it
 
 [[binary]]
 name = "campaign_editor.exe"
@@ -48,6 +55,10 @@ treatment = "lift"
 size = 261120
 sha256 = "545f402be018bc905c03305322072e194d77b1a5ec20b62c34cdbc4c81c961fa"
 variants = ["gog-de"]
+[binary.discover]
+returns = [0x1002b0a5]   # CRT x87 argument load: returns; a second entry follows the call to it
+# CRT x87 error stubs that nothing references (as in CulturesRecomp's Bink builds)
+seeds = [0x1002ac8e, 0x1002ac93, 0x1002ace8, 0x1002aced]
 
 [[binary]]
 name = "Mss32.dll"
@@ -66,3 +77,7 @@ size = 125952
 sha256 = "0a6db88a5fad28168c1dac700473c5709b17802c33e36b2668c3300c1e580fad"
 variants = ["gog-de"]
 notes = "Miles' MP3 decoder provider, loaded through RIB (M6)."
+[binary.discover]
+returns = [0x26f0b205]   # CRT x87 argument load: returns; a second entry follows the call to it
+# CRT x87 error stubs that nothing references (the same CRT as binkw32.dll's)
+seeds = [0x26f0adee, 0x26f0adf3, 0x26f0ae48, 0x26f0ae4d]

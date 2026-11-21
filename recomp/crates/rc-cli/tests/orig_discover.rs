@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-//! Code discovery on the extracted Cultures 1 binaries in `../orig/cultures1/<variant>/`
+//! Code discovery on the extracted Heroes IV binaries in `../orig/heroes4/<variant>/`
 //! (not available in CI): `cargo test --release -p rc-cli -- --ignored`.
 //!
 //! The M2 exit criterion, with the manifest hints applied: every byte of every code section
@@ -15,13 +15,10 @@ fn repo() -> &'static Path {
 }
 
 #[test]
-#[ignore = "needs the extracted game files in orig/cultures1/"]
-fn cultures1_binaries_are_discovered() {
+#[ignore = "needs the extracted game files in orig/heroes4/"]
+fn heroes4_binaries_are_discovered() {
     let ms = rc_manifest::load_dir(&repo().join("games")).expect("manifests");
-    let c1 = ms
-        .iter()
-        .find(|m| m.game.id == "cultures1")
-        .expect("cultures1");
+    let c1 = ms.iter().find(|m| m.game.id == "heroes4").expect("heroes4");
     let mut checked = 0;
     for b in c1
         .binaries
@@ -29,7 +26,7 @@ fn cultures1_binaries_are_discovered() {
         .filter(|b| b.treatment == rc_manifest::Treatment::Lift)
     {
         let v = &b.variants[0];
-        let path = repo().join("orig/cultures1").join(v).join(&b.name);
+        let path = repo().join("orig/heroes4").join(v).join(&b.name);
         let Ok(data) = std::fs::read(&path) else {
             eprintln!("skip {} (not extracted)", path.display());
             continue;
@@ -82,7 +79,7 @@ fn cultures1_binaries_are_discovered() {
             }
             if !img.is_dll {
                 assert!(
-                    m.functions.len() > 3900,
+                    m.functions.len() > 60000,
                     "{what}: {} functions",
                     m.functions.len()
                 );
@@ -91,5 +88,5 @@ fn cultures1_binaries_are_discovered() {
         }
         checked += 1;
     }
-    assert!(checked > 0, "nothing extracted in orig/cultures1/");
+    assert!(checked > 0, "nothing extracted in orig/heroes4/");
 }
