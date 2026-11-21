@@ -79,11 +79,11 @@ Status: ✅ done · 🔶 in progress · ⬜ not started
 | M5  | Picture and input                 | 🔶 | Intro movies (Bink) and the main menu render; mouse and keyboard work; windowed and full-screen. |
 | M6  | Sound and music                   | 🔶 | DirectSound effects and ambience; MP3 music from `music.h4r` through the Miles RIB MP3 codec; Bink movie sound. |
 | M7  | Adventure map and combat          | 🔶 | A scenario map starts: adventure map, town screen, hero screen, a combat fought to the end, an AI turn. Save and load round-trip. |
-| M8  | In game                           | ⬜ | A campaign map of the base game played through by hand; a scripted one-hour soak without trap; hotseat with two players; game speed and AI turn time measured. |
+| M8  | In game                           | 🔶 | A campaign map of the base game played through by hand; a scripted one-hour soak without trap; hotseat with two players; game speed and AI turn time measured. |
 | M9  | **Release v0.1**                  | ⬜ | Base game, *Gathering Storm* and *Winds of War* campaigns each start and their first map is played through; Linux, Windows and the CLI converter; release notes with the known issues. |
-| M10 | Multiplayer                       | ⬜ | TCP/IP games between two recompiled builds over LAN (host sockets under `wsock32`); GameSpy menu entries answer "not available" cleanly. |
-| M11 | Campaign editor                   | ⬜ | `campaign_editor.exe` lifted and running on the shared user32 desktop: open, edit and save a campaign; the game plays it. |
-| M12 | Converter and platforms           | ⬜ | `recomp convert` and the browser page turn the installer (exe + bin) into Windows, Linux, Android and browser builds; all four start and reach a map. |
+| M10 | Multiplayer                       | 🔶 | TCP/IP games between two recompiled builds over LAN (host sockets under `wsock32`); GameSpy menu entries answer "not available" cleanly. |
+| M11 | Campaign editor                   | 🔶 | `campaign_editor.exe` lifted and running on the shared user32 desktop: open, edit and save a campaign; the game plays it. |
+| M12 | Converter and platforms           | 🔶 | `recomp convert` and the browser page turn the installer (exe + bin) into Windows, Linux, Android and browser builds; all four start and reach a map. |
 | M13 | Polish                            | ⬜ | Opt-in: resolutions following the window and widescreen, integer scaling, touch controls (Android, browser), faster AI turns, settings in `settings.ini`. |
 
 ### M0 – Foundation
@@ -236,7 +236,8 @@ Binary treatment (first proposal, see M2 and M6):
 ### M8 – In game
 
 - [ ] A base-game campaign map played through by hand; campaign progress kept between maps
-- [ ] Scripted soak: one hour of random clicks with `RC_CLOCK=virtual` on the adventure map and in combat, no trap
+- [x] Scripted soak: 74,000 frames (about an hour of game time) of random clicks, right clicks, Escape and
+      Enter on the adventure map from the first scenario (`tools/soak-input`, seed 1), no trap, 18 minutes
 - [ ] Hotseat game with two human players
 - [ ] Record and replay input (`RC_RECORD`) used for regression runs of a fixed opening
 - [ ] Timing: animation and scrolling speed match the original (`timeGetTime`, `timeBeginPeriod(1)`)
@@ -250,25 +251,32 @@ Binary treatment (first proposal, see M2 and M6):
 
 ### M10 – Multiplayer
 
-- [ ] `wsock32` by ordinal on host sockets (CulturesRecomp's `hle/wsock` is offline so far): `socket`,
-      `connect`, `closesocket`, `htons`, `inet_addr`, `inet_ntoa`,
-      `gethostbyname`, `gethostname`, `getsockname`; find where `send`/`recv`/`WSAStartup` come from
-      (dynamic `GetProcAddress`? **open**)
+- [x] Transport found: TCP/IP and LAN games go through DirectPlay 8 (`CoCreateInstance` of the DirectPlay 8
+      objects), which CulturesRecomp's `dpnet` on its own network (`hle/dplay/net.c`) provides; the game uses
+      `WSOCK32` only for its host name and address and GameSpy. Hosting a TCP/IP game reaches the network
+      game's scenario list
 - [ ] TCP/IP host and join between two recompiled builds on one machine and on a LAN; a full game played
 - [ ] GameSpy: the menu entries fail cleanly; no connection attempts to dead servers (patch if needed)
 - [ ] Browser: no raw sockets — WebSocket relay or "not available" (decision when there)
 
 ### M11 – Campaign editor
 
-- [ ] Discover and lift `campaign_editor.exe` (3.1 MiB `.text`, statically linked MFC: expect many vtables and
-      message maps)
-- [ ] The ~71 imports CulturesRecomp's desktop lacks (RESEARCH): MDI (`DefFrameProcA`, `DefMDIChildProcA`,
-      `TranslateMDISysAccel`), property sheets, image lists and drag images, clipboard, OLE structured storage and
-      drag and drop (`StgCreateDocfileOnILockBytes`, `RegisterDragDrop`, …), `oledlg`, `OLEPRO32`, `OLEAUT32`
+- [x] Discover and lift `campaign_editor.exe`: 100 % (41,063 functions, 2148 vtables), 213 MB of C, linked into
+      `homm4-heroes4` (`--exe campaign_editor.exe`, with `RC_DESKTOP=1024x768`)
+- [x] It starts: main window, MDI document, tool bars, the object palette in a tab control, status bar, the New
+      Campaign dialog; a new map is created and drawn
+- [x] New in the shared HLE for it: MDI, the program's own clipboard, a tab control, region data and polygon
+      regions, the OLE calls MFC makes at start-up (no other programs to share objects with)
+- [ ] Still missing (on demand): property sheets, image lists and drag images, OLE structured storage
+      (`StgCreateDocfileOnILockBytes`), `oledlg`, `OLEPRO32`, `OLEAUT32`
 - [ ] Open a campaign, change it, save it; the game plays it
 
 ### M12 – Converter and platforms
 
+- [x] The native back end (Cranelift) compiles the whole game in 1 min 22 s (58 MB of x86-64 code); a package
+      made with `recomp template` + `recomp package` from a shell without lifted code plays the `firstturn`
+      scenario with exactly the C build's API calls and screenshot. Exceptions are unwound in the native and
+      WebAssembly back ends as in C
 - [ ] `recomp convert --system <linux|windows|android|web> setup_….exe` (finds the `-1.bin` beside it)
 - [ ] Browser page: picks both files (or a folder), reads the 1 GB slice in streamed blocks, stores the
       unpacked game in the origin's storage (OPFS) once; the player loads it from there
