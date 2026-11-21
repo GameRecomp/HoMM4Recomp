@@ -61,6 +61,7 @@ fn program() -> (Vec<Function>, BTreeSet<u32>) {
             insn(0x1010, 1, vec![Stmt::Trap("int3".into())], Term::Stop),
         ],
         labels: vec![0x1000, 0x1010],
+        ..Default::default()
     };
     let leaf = Function {
         addr: 0x2000,
@@ -74,6 +75,7 @@ fn program() -> (Vec<Function>, BTreeSet<u32>) {
             },
         )],
         labels: vec![0x2000],
+        ..Default::default()
     };
     (vec![main, leaf], [0x1000, 0x2000].into_iter().collect())
 }

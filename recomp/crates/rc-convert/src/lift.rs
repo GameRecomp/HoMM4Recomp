@@ -227,6 +227,20 @@ pub fn lift_map(l: &Loaded) -> Lifted {
         functions.push(rc_x86::lift_entry(&l.image, &l.map, f, *va));
     }
     functions.sort_by_key(|f| f.addr);
+    // Exceptions: which functions are __except blocks, and where exceptions continue in each
+    // function's frame (by the instruction that set the frame up, which every entry into the
+    // function's body contains).
+    let excepts = except_blocks(l);
+    let conts = continuations(l);
+    for f in &mut functions {
+        f.except_block = excepts.contains_key(&f.addr);
+        let own: BTreeSet<u32> = f.insns.iter().map(|i| i.addr).collect();
+        f.continuations = conts
+            .iter()
+            .filter(|(_, frame)| own.contains(frame))
+            .map(|(c, _)| *c)
+            .collect();
+    }
     let mut traps: BTreeMap<String, u32> = BTreeMap::new();
     let mut instructions = 0;
     for f in &functions {

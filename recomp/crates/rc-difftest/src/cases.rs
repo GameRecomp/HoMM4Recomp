@@ -771,8 +771,6 @@ pub fn lift_program(
 ) -> (String, String, usize) {
     let names = rc_emit_c::Entries {
         prefix: format!("p{k}_"),
-        except_blocks: Default::default(),
-        continuations: Default::default(),
         entries: entries.clone(),
     };
     let opts = rc_emit_c::Options {

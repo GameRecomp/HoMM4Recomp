@@ -95,11 +95,13 @@ fn every_kind_validates() {
             insn(0x100a, vec![], Term::Jump(0x1002)),
         ],
         labels: vec![],
+        ..Default::default()
     };
     let b = Function {
         addr: 0x2000,
         insns: vec![insn(0x2000, vec![], Term::Ret(4))],
         labels: vec![],
+        ..Default::default()
     };
     let addrs: BTreeSet<u32> = [0x1000, 0x2000].into();
     let cx = Compiler::new(&addrs, Options::default());

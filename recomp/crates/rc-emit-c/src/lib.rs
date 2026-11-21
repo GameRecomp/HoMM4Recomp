@@ -39,26 +39,12 @@ pub trait Program {
     fn name(&self, addr: u32) -> String;
     /// Whether `addr` is a function entry.
     fn is_entry(&self, addr: u32) -> bool;
-    /// Whether the function at `addr` is an `__except` block (see `Entries::except_blocks`).
-    fn is_except_block(&self, _addr: u32) -> bool {
-        false
-    }
-    /// The places outside `f`'s own code where an exception continues in its frame.
-    fn continuations_of(&self, _f: &Function) -> Vec<u32> {
-        Vec::new()
-    }
 }
 
 /// Names functions `<prefix>XXXXXXXX`.
 #[derive(Debug, Clone)]
 pub struct Entries {
     pub prefix: String,
-    /// `__except` blocks (rc_convert::lift::except_blocks): entered during an exception, a block
-    /// starts the unwinding to its frame instead of running.
-    pub except_blocks: BTreeSet<u32>,
-    /// Where exceptions continue (rc_convert::lift::continuations), each with the instruction
-    /// that set up its frame: the function holding that instruction takes the place over.
-    pub continuations: BTreeMap<u32, u32>,
     pub entries: BTreeSet<u32>,
 }
 
@@ -68,17 +54,6 @@ impl Program for Entries {
     }
     fn is_entry(&self, addr: u32) -> bool {
         self.entries.contains(&addr)
-    }
-    fn is_except_block(&self, addr: u32) -> bool {
-        self.except_blocks.contains(&addr)
-    }
-    fn continuations_of(&self, f: &Function) -> Vec<u32> {
-        let own: BTreeSet<u32> = f.insns.iter().map(|i| i.addr).collect();
-        self.continuations
-            .iter()
-            .filter(|(_, frame)| own.contains(frame))
-            .map(|(b, _)| *b)
-            .collect()
     }
 }
 
@@ -806,7 +781,7 @@ impl Emitter<'_> {
         // An __except block runs in its function's frame: called by __except_handler3 during an
         // exception, it first unwinds the lifted functions to that frame, which then enters it
         // again (rc_unwind_claim sets resume_eip).
-        if self.p.is_except_block(f.addr) {
+        if f.except_block {
             let _ = writeln!(
                 self.out,
                 "    if (c->resume_eip == {a:#x}u) {{ c->resume_eip = 0; }} else if (c->eh_depth) {{ rc_unwind_begin(c, {a:#x}u); return; }}",
@@ -847,7 +822,7 @@ pub fn function(p: &dyn Program, f: &Function, opts: Options) -> String {
         out: String::new(),
         depth: 0,
         unwind_range: (0, 0),
-        continuations: p.continuations_of(f),
+        continuations: f.continuations.clone(),
     };
     e.unwind_range = e.compute_unwind_range();
     e.function(opts);
@@ -955,11 +930,10 @@ mod tests {
             addr: 0x1001,
             insns: vec![insn(0x1000, Term::Ret(0)), insn(0x1001, Term::Jump(0x1000))],
             labels: vec![0x1000, 0x1001],
+            ..Default::default()
         };
         let p = Entries {
             prefix: "f_".into(),
-            except_blocks: BTreeSet::new(),
-            continuations: BTreeMap::new(),
             entries: [0x1001].into_iter().collect(),
         };
         let c = function(&p, &f, Options::default());

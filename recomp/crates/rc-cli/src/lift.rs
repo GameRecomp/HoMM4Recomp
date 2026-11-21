@@ -270,8 +270,6 @@ pub fn lift(o: &LiftOpts, paths: &[PathBuf]) -> Result<ExitCode, String> {
         let entries: BTreeSet<u32> = lifted.functions.iter().map(|f| f.addr).collect();
         let names = rc_emit_c::Entries {
             prefix: format!("{sym}_"),
-            except_blocks: rc_convert::lift::except_blocks(&l).into_keys().collect(),
-            continuations: rc_convert::lift::continuations(&l),
             entries,
         };
         let opts = rc_emit_c::Options {

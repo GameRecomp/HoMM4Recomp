@@ -547,7 +547,7 @@ impl Insn {
 }
 
 /// A lifted function.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Function {
     pub addr: u32,
     /// Instructions in ascending address order.
@@ -555,6 +555,16 @@ pub struct Function {
     /// Addresses that start a block: entry, jump targets, fall-through
     /// after branches.
     pub labels: Vec<u32>,
+    /// Exceptions (MSVC SEH and C++ EH): an `__except` block, which
+    /// `__except_handler3` calls during an exception and which continues in
+    /// its function's frame; back ends make it start the unwinding to that
+    /// frame when entered during an exception (rc_unwind_begin).
+    pub except_block: bool,
+    /// Places outside this function's own instructions where an exception
+    /// continues in its frame (its `__except` blocks, the continuations its
+    /// C++ catch blocks return); after a call, a frame takes the
+    /// continuation over if it is one of these or inside its code.
+    pub continuations: Vec<u32>,
 }
 
 /// Make every call and jump to one of `hooks` (function entries) a transfer
@@ -681,6 +691,7 @@ mod tests {
                 insn(0x10a, Term::Jump(0x900)),
             ],
             labels: vec![0x100],
+            ..Default::default()
         };
         let hooks = [0x900].into_iter().collect();
         assert!(route_through_dispatch(&mut f, &hooks).is_empty());
@@ -716,6 +727,7 @@ mod tests {
                 term: Term::Next,
             }],
             labels: vec![0x100],
+            ..Default::default()
         };
         assert_eq!(load_operand(&mut f, 0x100, 1600, 0x5a0fc0), 1);
         assert!(insert_point(&mut f, 0x100));

@@ -68,6 +68,7 @@ pub fn lift_entry(image: &Image, map: &CodeMap, f: &Function, entry: u32) -> ir:
         addr: entry,
         insns,
         labels: labels.into_iter().collect(),
+        ..Default::default()
     }
 }
 
