@@ -721,6 +721,20 @@ static void k_IsLost(rc_cpu *c)
     RC_RETURN(c, DD_OK, 1);
 }
 
+/* GetBltStatus(flags), GetFlipStatus(flags): blits and flips are done when their call returns. */
+static void k_GetBltStatus(rc_cpu *c)
+{
+    self(c, O_SURFACE);
+    RC_RETURN(c, DD_OK, 2);
+}
+
+/* PageLock(flags), PageUnlock(flags): nothing is paged out. */
+static void k_PageLock(rc_cpu *c)
+{
+    self(c, O_SURFACE);
+    RC_RETURN(c, DD_OK, 2);
+}
+
 static void k_Restore(rc_cpu *c)
 {
     rc_d3d_flush();
@@ -1509,6 +1523,10 @@ const rc_import_def rc_ddraw_defs[] = {
     M("IDirectDrawSurface", "GetSurfaceDesc", k_GetSurfaceDesc),
     M("IDirectDrawSurface4", "GetSurfaceDesc", k_GetSurfaceDesc),
     M("IDirectDrawSurface", "IsLost", k_IsLost),
+    M("IDirectDrawSurface", "GetBltStatus", k_GetBltStatus),
+    M("IDirectDrawSurface", "GetFlipStatus", k_GetBltStatus),
+    M("IDirectDrawSurface", "PageLock", k_PageLock),
+    M("IDirectDrawSurface", "PageUnlock", k_PageLock),
     M("IDirectDrawSurface", "Lock", k_Lock),
     M("IDirectDrawSurface", "ReleaseDC", k_ReleaseDC),
     M("IDirectDrawSurface", "Restore", k_Restore),
