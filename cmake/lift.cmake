@@ -2,7 +2,7 @@
 #
 # rc_add_game(<id> TITLE <title> EXES <exe>...)
 #
-# Creates the executable `cultures-<id>` for one game (and one per other unpacked install, see
+# Creates the executable `homm4-<id>` for one game (and one per other unpacked install, see
 # below). The shell's main() is generated from cmake/game_main.c.in. Lifted C (generated/<id>/,
 # produced by `recomp lift`, never committed) is compiled in and RC_HAVE_GENERATED is defined.
 # Without lifted code the shell still builds and reports that the game has not been lifted.
@@ -16,8 +16,8 @@
 # - a game without a folder in orig/<id>/ is unpacked while configuring from its installer,
 #   CD image or zip in orig/ (`recomp extract --game`, the first variant the manifest lists
 #   whose medium is there);
-# - every other folder in orig/<id>/ gets a target cultures-<id>-<folder> (outside `all`) that
-#   lifts and links only that install, e.g. cultures-cultures1-gold-de for debugging the Gold
+# - every other folder in orig/<id>/ gets a target homm4-<id>-<folder> (outside `all`) that
+#   lifts and links only that install, e.g. homm4-heroes4-gog-en for debugging another
 #   build; each target links its own set (`recomp lift --set`, in the build tree), and each
 #   lifted binary is compiled once, as an object library the targets share;
 # - a target without a set yet is lifted while configuring, so that the sources are there to be
@@ -120,9 +120,9 @@ function(rc_extract_now id)
     OUTPUT_VARIABLE out ERROR_VARIABLE err
     RESULT_VARIABLE failed)
   if(NOT failed)
-    message(STATUS "cultures-${id}: unpacked its medium from orig/ into orig/${id}/")
+    message(STATUS "homm4-${id}: unpacked its medium from orig/ into orig/${id}/")
   elseif(NOT err MATCHES "none of the media")
-    message(WARNING "cultures-${id}: unpacking failed: ${err}")
+    message(WARNING "homm4-${id}: unpacking failed: ${err}")
   endif()
 endfunction()
 
@@ -263,10 +263,10 @@ endfunction()
 
 # rc_add_game(<id> TITLE <title> EXES <exe>... [GUEST_DIR <dir>])
 #
-# cultures-<id> lifts and links <ID>_GAME_DIRS (default: orig/<id>/gog-en, else the first folder);
-# every other folder in orig/<id>/ gets a target cultures-<id>-<folder> of its own (e.g.
-# cultures-cultures1-gold-de), outside `all`, which lifts and links only that install, for
-# debugging another build. Without lifting (RC_AUTO_LIFT off, no cargo: CI) cultures-<id> compiles
+# homm4-<id> lifts and links <ID>_GAME_DIRS (default: orig/<id>/gog-en, else the first folder);
+# every other folder in orig/<id>/ gets a target homm4-<id>-<folder> of its own (e.g.
+# homm4-heroes4-gog-en), outside `all`, which lifts and links only that install, for
+# debugging another build. Without lifting (RC_AUTO_LIFT off, no cargo: CI) homm4-<id> compiles
 # whatever `recomp lift` put into generated/<id>/.
 function(rc_add_game id)
   # PATCHES: the game project's patch sources (games/<id>/patches.c and what it uses); they
@@ -279,7 +279,7 @@ function(rc_add_game id)
   set(RC_GAME_ID "${id}")
   set(RC_GAME_TITLE "${G_TITLE}")
   if(NOT G_GUEST_DIR)
-    set(G_GUEST_DIR "C:\\\\Cultures")
+    set(G_GUEST_DIR "C:\\\\Games\\\\${id}")
   endif()
   set(RC_GAME_GUEST_DIR "${G_GUEST_DIR}")
   set(RC_GAME_EXES "")
@@ -297,7 +297,7 @@ function(rc_add_game id)
   set(main_c "${CMAKE_CURRENT_BINARY_DIR}/main_${id}.c")
   configure_file("${PROJECT_SOURCE_DIR}/cmake/game_main.c.in" "${main_c}" @ONLY)
 
-  set(target "cultures-${id}")
+  set(target "homm4-${id}")
   set(gen_dir "${RC_GENERATED_DIR}/${id}")
   set(can_lift OFF)
   if(RC_AUTO_LIFT AND RC_CARGO AND NOT CMAKE_CROSSCOMPILING)

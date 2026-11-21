@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-package io.github.gamerecomp.culturesrecomp;
+package io.github.gamerecomp.homm4recomp;
 
 import android.os.Build;
 import android.os.Bundle;
@@ -18,7 +18,7 @@ import org.libsdl.app.SDLActivity;
  * the UI thread, cannot come: the window is made full screen from the game
  * too, where waiting is right.)
  */
-public class CulturesActivity extends SDLActivity {
+public class RecompActivity extends SDLActivity {
     @Override
     protected String[] getLibraries() {
         return new String[] {"SDL3", "SDL3_ttf", "SDL3_mixer", "main"};

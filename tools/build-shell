@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# Build a game's shell (cultures-<game> without lifted code: it runs the native code and game files
+# Build a game's shell (homm4-<game> without lifted code: it runs the native code and game files
 # in data/ beside it) as one self-contained program, with SDL3, SDL3_ttf and SDL3_mixer built from
 # their releases and linked statically, as in TropicoRecomp. CI runs this on Linux and Windows.
 #
@@ -10,7 +10,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 out=${1:?output file}
-game=${2:-cultures1}
+game=${2:-heroes4}
 . tools/game-info "$game"
 # shellcheck source=tools/sdl-versions
 . tools/sdl-versions
@@ -58,9 +58,9 @@ cmake -S . -B "$work/rc" "${common[@]}" -DRC_BUILD_TESTS=OFF -DRC_AUTO_LIFT=OFF 
     "-DRC_GENERATED_DIR=$PWD/$work/none" | tee "$work/rc.log" | grep -E "^-- platform" || true
 grep -q "platform: SDL3" "$work/rc.log" || { echo "build-shell: SDL3 was not found" >&2; exit 1; }
 grep -q "platform: SDL3_mixer" "$work/rc.log" || { echo "build-shell: SDL3_mixer was not found" >&2; exit 1; }
-cmake --build "$work/rc" --config Release --target "cultures-$game" --parallel
-for f in "$work/rc/games/$game/cultures-$game" "$work/rc/games/$game/Release/cultures-$game.exe" \
-         "$work/rc/games/$game/cultures-$game.exe"; do
+cmake --build "$work/rc" --config Release --target "homm4-$game" --parallel
+for f in "$work/rc/games/$game/homm4-$game" "$work/rc/games/$game/Release/homm4-$game.exe" \
+         "$work/rc/games/$game/homm4-$game.exe"; do
     if [ -f "$f" ]; then
         mkdir -p "$(dirname "$out")"
         cp "$f" "$out"

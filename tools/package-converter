@@ -39,10 +39,10 @@ cp "$recomp" "$dir/$prog"
 chmod 755 "$dir/$prog"
 cp "${zips[@]}" "$dir/templates/"
 
-# What it builds for, from the templates' names (Cultures-linux.zip).
+# What it builds for, from the templates' names (Heroes4-linux.zip).
 systems=$(for z in "${zips[@]}"; do b=${z##*/}; b=${b%.zip}; echo "${b##*-}"; done | sort -u | tr '\n' ' ')
 games=""
-for g in cultures1 cultures2 northland eighthwonder saga; do
+for g in heroes4; do
     . tools/game-info "$g"
     have=("$templates/$GAME_STEM-"*.zip)
     if [ ${#have[@]} -gt 0 ]; then
@@ -50,20 +50,19 @@ for g in cultures1 cultures2 northland eighthwonder saga; do
     fi
 done
 sed 's/$/\r/' > "$dir/README.txt" <<EOF
-CulturesRecomp converter $(tools/version)
+HoMM4Recomp converter $(tools/version)
 
-Turns your own copy of a Cultures game into a build of it for a system,
-as the converter page does in a browser, here without a browser and
-without a network connection. What it takes (the English GOG installers'
-names; the German and Spanish ones work as well):
+Turns your own copy of Heroes of Might and Magic IV into a build of it
+for a system, as the converter page does in a browser, here without a
+browser and without a network connection. What it takes (the GOG
+installer; keep its -1.bin file beside it):
 
 $games
 It builds for: ${systems% }
 
-    $run convert --system linux setup_cultures_2.1.0.12.exe
+    $run convert --system linux "setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023).exe"
 
-writes Cultures-linux.zip (Cultures2-..., Northland-... for the other
-games; an .apk for android) in the current folder; -o names another
+writes Heroes4-linux.zip (an .apk for android) in the current folder; -o names another
 file. The build contains your copy of the game: keep it for yourself and
 do not share it.
 
@@ -72,7 +71,7 @@ do not share it.
 lists the commands. On macOS the program is not signed: allow it once
 with  xattr -d com.apple.quarantine recomp
 
-https://github.com/GameRecomp/CulturesRecomp
+https://github.com/GameRecomp/HoMM4Recomp
 EOF
 
 rm -f "$out"

@@ -15,7 +15,7 @@ cd "$(git rev-parse --show-toplevel)"
 shell=${1:?shell}
 out=${2:?output}
 icons=${3:-build/icons}
-game=${4:-cultures1}
+game=${4:-heroes4}
 . tools/game-info "$game"
 arch=x86_64
 id=$GAME_APP_ID
@@ -73,17 +73,17 @@ cat > "$share/metainfo/$id.appdata.xml" <<METAINFO
   <description>
     <p>
       $GAME_DESCRIPTION, recompiled from your own copy into a
-      native program by CulturesRecomp. This package holds the user's copy of
+      native program by HoMM4Recomp. This package holds the user's copy of
       the game: it was made by the converter on the user's machine and is not
       to be shared.
     </p>
   </description>
   <developer id="io.github.gamerecomp">
-    <name>CulturesRecomp</name>
+    <name>HoMM4Recomp</name>
   </developer>
   <launchable type="desktop-id">$id.desktop</launchable>
-  <url type="homepage">https://gamerecomp.github.io/CulturesRecomp/</url>
-  <url type="vcs-browser">https://github.com/GameRecomp/CulturesRecomp</url>
+  <url type="homepage">https://gamerecomp.github.io/HoMM4Recomp/</url>
+  <url type="vcs-browser">https://github.com/GameRecomp/HoMM4Recomp</url>
   <categories>
     <category>Game</category>
     <category>StrategyGame</category>

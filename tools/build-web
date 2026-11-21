@@ -8,7 +8,7 @@
 # TEMPLATE_DIR holds each game's templates, <Stem>-<system>.zip for
 # windows, linux, macos and android (made by `recomp template`); those
 # present are copied. WEB_SHELL_DIR holds the web shells
-# (tools/build-web-shell: cultures1.js, ...) for playing in the browser; it
+# (tools/build-web-shell: heroes4.js) for playing in the browser; it
 # goes to player/.
 # Systems that platforms.json has off get neither; the file goes to the
 # site too, and the page offers them as off.
@@ -24,13 +24,13 @@ mkdir -p "$site/templates"
 wasm-bindgen --target web --no-typescript --out-dir "$site" \
     recomp/target/wasm32-unknown-unknown/release/rc_web.wasm
 cp web/index.html web/app.js web/games.js web/worker.js web/style.css web/play.html web/play.js "$site/"
-cp tools/icons/cultures1.svg tools/icons/cultures2.svg tools/icons/northland.svg tools/icons/eighthwonder.svg tools/icons/saga.svg "$site/"
+cp tools/icons/heroes4.svg "$site/"
 # The version (tools/version) in the page's footer.
 sed -i "s/@VERSION@/$(tools/version)/" "$site/index.html"
 cp platforms.json "$site/platforms.json"
 on() { python3 -c 'import json, sys; sys.exit(0 if json.load(open("platforms.json")).get(sys.argv[1], True) else 1)' "$1"; }
 if [ -n "$templates" ]; then
-    for stem in Cultures Cultures2 Northland EighthWonder CulturesSaga; do
+    for stem in Heroes4; do
         for s in windows linux macos android; do
             if on "$s" && [ -f "$templates/$stem-$s.zip" ]; then
                 cp "$templates/$stem-$s.zip" "$site/templates/"

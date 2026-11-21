@@ -447,7 +447,7 @@ static void k_GetTimeFormatA(rc_cpu *c) { date_time(c, false); }
 
 static void k_GetComputerNameA(rc_cpu *c)
 {
-    const char *name = "CULTURES";
+    const char *name = "RECOMP";
     uint32_t buf = RC_ARG(c, 0), psize = RC_ARG(c, 1);
     uint32_t n = (uint32_t)strlen(name);
     if (rc_ld32(psize) <= n) {

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
-# Build the web shell: cultures-<game> (the game program without lifted
+# Build the web shell: homm4-<game> (the game program without lifted
 # code) compiled with Emscripten for a browser, with SDL3, SDL3_ttf and
 # SDL3_mixer built from their releases, as in TropicoRecomp. The converter
 # page's "Browser" system plays the game with it (web/play.html).
 #
 #   tools/build-web-shell OUT_DIR [GAME]
 #
-# GAME is cultures1 (the default) ... saga (tools/game-info).
+# GAME is heroes4 (the default; tools/game-info).
 #
 # Writes OUT_DIR/<game>.js and OUT_DIR/<game>.wasm and OUT_DIR/fonts/ (the
 # Liberation fonts, from FONT_DIR or the system's fonts-liberation).
@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 out=${1:?output directory}
-game=${2:-cultures1}
+game=${2:-heroes4}
 . tools/game-info "$game"
 
 # shellcheck source=tools/sdl-versions
@@ -59,7 +59,7 @@ emcmake cmake -S . -B "$work/rc" "${common[@]}" -DRC_BUILD_TESTS=OFF -DRC_AUTO_L
     -DRC_GENERATED_DIR="$PWD/$work/none" \
     | tee "$work/rc.log" | grep -E "^-- platform" || true
 grep -q "platform: SDL3_mixer" "$work/rc.log" || { echo "build-web-shell: SDL3 or its libraries were not found" >&2; exit 1; }
-cmake --build "$work/rc" --target "cultures-$game" --parallel
+cmake --build "$work/rc" --target "homm4-$game" --parallel
 
 mkdir -p "$out/fonts"
 cp "$work/rc/games/$game/$game.js" "$work/rc/games/$game/$game.wasm" "$out/"

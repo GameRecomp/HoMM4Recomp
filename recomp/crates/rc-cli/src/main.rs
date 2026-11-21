@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-//! `recomp`: the Cultures recompiler command line.
+//! `recomp`: the recompiler command line.
 //!
 //! Commands: `identify`, `info`, `list`, `extract`, `discover`, `codediff`, `lift`, `convert`.
 
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const USAGE: &str = "\
-recomp - static recompiler for the Cultures games
+recomp - static recompiler for Heroes of Might and Magic IV
 
 USAGE:
     recomp identify [--games DIR] PATH...   match files (installers, ISO, binaries) by SHA-256

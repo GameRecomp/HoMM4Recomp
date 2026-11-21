@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # The converter site, as in TropicoRecomp: the game shells of the five
-# Cultures games for Windows, Linux, macOS and Android and the web shells of
+# Heroes of Might and Magic IV for Windows, Linux, macOS and Android and the web shells of
 # the four sold as GOG installers, for playing in the browser (no game code
 # in any of them),
 # for the systems platforms.json has on, the converter compiled to
@@ -76,7 +76,7 @@ jobs:
           name: icons
           path: build/icons
       - run: |
-          for g in cultures1 cultures2 northland eighthwonder saga; do
+          for g in heroes4; do
             . tools/game-info "$g"
             tools/build-shell "build/out/$g-shell" "$g"
             tools/make-appimage "build/out/$g-shell" "build/out/$GAME_STEM.AppImage" build/icons "$g"
@@ -93,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          for g in cultures1 cultures2 northland eighthwonder saga; do
+          for g in heroes4; do
             . tools/game-info "$g"
             tools/build-shell "build/out/$GAME_STEM" "$g"
           done
@@ -117,7 +117,7 @@ jobs:
           name: icons
           path: build/icons
       - run: |
-          for g in cultures1 cultures2 northland eighthwonder saga; do
+          for g in heroes4; do
             . tools/game-info "$g"
             tools/build-shell "build/out/$GAME_STEM.exe" "$g"
           done
@@ -141,7 +141,7 @@ jobs:
       # The icons (tools/make-icons) for the apps.
       - run: sudo apt-get update && sudo apt-get install -y librsvg2-bin imagemagick
       - run: |
-          for g in cultures1 cultures2 northland eighthwonder saga; do
+          for g in heroes4; do
             . tools/game-info "$g"
             tools/build-android "build/out/$GAME_STEM-shell.apk" "$g"
           done
@@ -166,7 +166,7 @@ jobs:
           "$RUNNER_TEMP/emsdk/emsdk" activate 7.0.0
       - run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
-          for g in cultures1 cultures2 northland eighthwonder saga; do
+          for g in heroes4; do
             tools/build-web-shell build/out/web "$g"
           done
       - uses: actions/upload-artifact@v4
@@ -191,7 +191,7 @@ jobs:
           mkdir -p build/templates
           on() { jq -e ".$1" platforms.json > /dev/null; }
           # Each game's template per system: <Stem>-<system>.zip.
-          for g in cultures1 cultures2 northland eighthwonder saga; do
+          for g in heroes4; do
             . tools/game-info "$g"
             t() { recomp/target/release/recomp template --game "$g" --system "$@"; }
             if on linux; then
@@ -262,7 +262,7 @@ jobs:
   converters:
     # Each recomp with every template, as the archive a release offers
     # (release-upload.yml puts them there):
-    # CulturesRecomp-converter-<system>-<arch>.zip (Windows) or .tar.gz.
+    # HoMM4Recomp-converter-<system>-<arch>.zip (Windows) or .tar.gz.
     needs: [platforms, templates, recomp]
     if: ${{ !cancelled() && !failure() && needs.platforms.outputs.hosts != '[]' }}
     runs-on: ubuntu-22.04
@@ -281,7 +281,7 @@ jobs:
           HOSTS: ${{ needs.platforms.outputs.hosts }}
         run: |
           jq -r '.[] | "\(.system) \(.arch)"' <<< "$HOSTS" | while read -r system arch; do
-            name=CulturesRecomp-converter-$system-$arch
+            name=HoMM4Recomp-converter-$system-$arch
             if [ "$system" = windows ]; then
               tools/package-converter build/recomp/recomp-windows/recomp.exe build/templates "build/converters/$system/$name.zip"
             else

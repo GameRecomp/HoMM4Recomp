@@ -5,7 +5,7 @@
      in assets/data on its first start. tools/build-android puts the
      version (VERSION) in place of versionCode and versionName. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="io.github.gamerecomp.culturesrecomp"
+    package="io.github.gamerecomp.homm4recomp"
     android:versionCode="1"
     android:versionName="1.0"
     android:installLocation="auto">
@@ -14,16 +14,16 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
-        android:label="Cultures"
+        android:label="HoMM4"
         android:icon="@drawable/icon"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:hardwareAccelerated="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
         <activity
-            android:name=".CulturesActivity"
+            android:name=".RecompActivity"
             android:exported="true"
-            android:label="Cultures"
+            android:label="HoMM4"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
             android:screenOrientation="sensorLandscape"

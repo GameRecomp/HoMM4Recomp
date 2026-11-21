@@ -39,14 +39,13 @@ fn main() {
     }
     let games = crates.join("../../games");
     println!("cargo:rerun-if-changed={}", games.display());
-    for g in [
-        "cultures1",
-        "cultures2",
-        "northland",
-        "eighthwonder",
-        "saga",
-    ] {
-        list.push(games.join(g).join("game.toml"));
+    if let Ok(d) = std::fs::read_dir(&games) {
+        for e in d.filter_map(Result::ok) {
+            let m = e.path().join("game.toml");
+            if m.is_file() {
+                list.push(m);
+            }
+        }
     }
     list.sort();
     // FNV-1a over the names (relative) and contents.

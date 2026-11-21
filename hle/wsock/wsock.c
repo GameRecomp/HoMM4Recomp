@@ -140,7 +140,7 @@ static void k_inet_ntoa(rc_cpu *c)
 /* gethostname(buffer, size) */
 static void k_gethostname(rc_cpu *c)
 {
-    const char *name = "cultures";
+    const char *name = "recomp";
     if (RC_ARG(c, 1) <= strlen(name)) {
         last_error = 10014; /* WSAEFAULT */
         RC_RETURN(c, SOCKET_ERROR, 2);

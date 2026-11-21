@@ -134,7 +134,7 @@ impl ApkKey {
     /// them. It is derived from a fixed text and is no secret; it vouches
     /// only for "made by this converter".
     pub fn builtin() -> ApkKey {
-        let seed = Sha256::digest(b"CulturesRecomp APK signing key, version 1");
+        let seed = Sha256::digest(b"HoMM4Recomp APK signing key, version 1");
         ApkKey::from_bytes(&seed).expect("the built-in key is a valid P-256 key")
     }
 

@@ -101,7 +101,7 @@ pub fn convert(o: &ConvertOpts, paths: &[PathBuf]) -> Result<ExitCode, String> {
     )?;
 
     // 3. Build the game's program.
-    let target = format!("cultures-{id}");
+    let target = format!("homm4-{id}");
     // The build lifts again when the lifter or the manifest changes (cmake/lift.cmake): from
     // this install, not another variant in orig/. (`absolute`, not `canonicalize`: no `\\?\`
     // prefix on Windows, which CMake does not take.)

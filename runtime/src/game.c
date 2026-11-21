@@ -2,7 +2,7 @@
 /*
  * The entry point shared by every game shell (cmake/game_main.c.in):
  *
- *   cultures-<id> [--game-dir DIR] [--user-dir DIR] [--exe NAME] [--check] [-- GAME_ARGS...]
+ *   homm4-<id> [--game-dir DIR] [--user-dir DIR] [--exe NAME] [--check] [-- GAME_ARGS...]
  *
  * It finds the installed game, hashes its executable and the DLLs next to it, picks the
  * lifted binaries whose hashes match (a shell links every build lifted for its game), and
@@ -33,7 +33,7 @@ static void usage(const rc_game_info *g, FILE *f)
     fprintf(f,
             "%s - static recompilation of %s\n"
             "\n"
-            "usage: cultures-%s [--game-dir DIR] [--user-dir DIR] [--exe NAME] [--check] [-- GAME_ARGS...]\n"
+            "usage: homm4-%s [--game-dir DIR] [--user-dir DIR] [--exe NAME] [--check] [-- GAME_ARGS...]\n"
             "\n"
             "  --game-dir DIR   your installed copy (default: $RC_GAME_DIR, else the current\n"
             "                   directory, else the lifted install in orig/%s/ above it or\n"
@@ -334,7 +334,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
             usage(game, stdout);
             return RC_EXIT_OK;
         } else if (strcmp(a, "--version") == 0) {
-            printf("cultures-%s %s (%s)\n", game->id, RC_VERSION, RC_GIT_HASH);
+            printf("homm4-%s %s (%s)\n", game->id, RC_VERSION, RC_GIT_HASH);
             return RC_EXIT_OK;
         } else if (strcmp(a, "--check") == 0) {
             do_check = true;
@@ -530,7 +530,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
 
     static char user[RC_PATH_MAX];
     if (!user_dir) {
-        const char *u = rc_plat_user_dir("culturesrecomp", game->id);
+        const char *u = rc_plat_user_dir("homm4recomp", game->id);
         snprintf(user, sizeof user, "%s", u ? u : "user");
         user_dir = user;
     }

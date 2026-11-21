@@ -6,7 +6,7 @@
 #   tools/make-icons [OUT_DIR]        (default: build/icons)
 #
 # writes OUT_DIR/<game>/png/<size>.png (16 to 512) and OUT_DIR/<game>.ico, which the Windows
-# build puts into cultures-<game>.exe (cmake/lift.cmake). Rendering needs rsvg-convert
+# build puts into homm4-<game>.exe (cmake/lift.cmake). Rendering needs rsvg-convert
 # (librsvg), else a headless Firefox; ImageMagick's own SVG renderer draws no gradients and is
 # the last resort. Packing the .ico needs ImageMagick (7's `magick`, or 6's `convert`, which
 # Ubuntu ships).
