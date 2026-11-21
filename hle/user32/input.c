@@ -679,6 +679,29 @@ static void k_WaitMessage(rc_cpu *c)
     RC_RETURN(c, 1, 0);
 }
 
+/* Whether a message waits in the queue (MsgWaitForMultipleObjects' input). */
+static bool queue_has_input(void *ctx)
+{
+    rc_cpu *c = ctx;
+    uint32_t tmp = rc_heap_alloc(28, false);
+    bool any = rc_peek_message(c, tmp, 0, 0, 0, false) != 0;
+    rc_heap_free(tmp);
+    return any;
+}
+
+/* MsgWaitForMultipleObjects(n, handles, all, timeout, wake mask): a handle, or input
+ * (WAIT_OBJECT_0 + n). */
+static void k_MsgWaitForMultipleObjects(rc_cpu *c)
+{
+    uint32_t n = RC_ARG(c, 0), p = RC_ARG(c, 1);
+    uint32_t h[64];
+    n = n > 64 ? 64 : n;
+    for (uint32_t i = 0; i < n; i++) {
+        h[i] = rc_ld32(p + 4 * i);
+    }
+    RC_RETURN(c, rc_k32_wait(h, n, RC_ARG(c, 2) != 0, RC_ARG(c, 3), queue_has_input, c), 5);
+}
+
 static void k_GetMessageTime(rc_cpu *c) { RC_RETURN(c, last_time, 0); }
 static void k_GetMessagePos(rc_cpu *c) { RC_RETURN(c, last_pos, 0); }
 
@@ -1016,6 +1039,7 @@ const rc_import_def rc_user32_input[] = {
     {U32, "PeekMessageA", k_PeekMessageA},
     {U32, "GetMessageA", k_GetMessageA},
     {U32, "WaitMessage", k_WaitMessage},
+    {U32, "MsgWaitForMultipleObjects", k_MsgWaitForMultipleObjects},
     {U32, "GetMessageTime", k_GetMessageTime},
     {U32, "GetMessagePos", k_GetMessagePos},
     {U32, "TranslateMessage", k_TranslateMessage},

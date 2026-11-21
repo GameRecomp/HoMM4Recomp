@@ -210,6 +210,8 @@ static void k_FatalAppExitA(rc_cpu *c)
 static void k_GetCurrentProcess(rc_cpu *c) { RC_RETURN(c, 0xffffffffu, 0); }
 static void k_GetCurrentThread(rc_cpu *c) { RC_RETURN(c, 0xfffffffeu, 0); }
 static void k_GetCurrentThreadId(rc_cpu *c) { RC_RETURN(c, rc_thread_id(), 0); }
+/* DisableThreadLibraryCalls(module): DllMain is never called for threads here anyway. */
+static void k_DisableThreadLibraryCalls(rc_cpu *c) { RC_RETURN(c, 1, 1); }
 
 static void k_CreateThread(rc_cpu *c)
 {
@@ -476,6 +478,53 @@ static void k_GetSystemTime(rc_cpu *c)
     RC_RETURN(c, 0, 1);
 }
 
+/* GetSystemTimeAsFileTime(ft) */
+static void k_GetSystemTimeAsFileTime(rc_cpu *c)
+{
+    uint64_t t = now_filetime();
+    rc_st32(RC_ARG(c, 0), (uint32_t)t);
+    rc_st32(RC_ARG(c, 0) + 4, (uint32_t)(t >> 32));
+    RC_RETURN(c, 0, 1);
+}
+
+/* GetSystemInfo(info): one Pentium II class processor (as cpuid says), 4 KiB pages,
+ * 64 KiB allocation granularity, the 2 GiB user address space. */
+static void k_GetSystemInfo(rc_cpu *c)
+{
+    uint32_t p = RC_ARG(c, 0);
+    rc_st16(p + 0, 0);              /* PROCESSOR_ARCHITECTURE_INTEL */
+    rc_st16(p + 2, 0);
+    rc_st32(p + 4, 0x1000);         /* page size */
+    rc_st32(p + 8, 0x00010000);     /* lowest application address */
+    rc_st32(p + 12, 0x7ffeffff);    /* highest */
+    rc_st32(p + 16, 1);             /* active processor mask */
+    rc_st32(p + 20, 1);             /* processors */
+    rc_st32(p + 24, 586);           /* PROCESSOR_INTEL_PENTIUM */
+    rc_st32(p + 28, 0x10000);       /* allocation granularity */
+    rc_st16(p + 32, 6);             /* processor level (family) */
+    rc_st16(p + 34, 0x0803);        /* model 8, stepping 3 */
+    RC_RETURN(c, 0, 1);
+}
+
+/* OpenProcess(access, inherit, pid): only the program's own process (id 1) exists. */
+static void k_OpenProcess(rc_cpu *c)
+{
+    if (RC_ARG(c, 2) == 1) {
+        RC_RETURN(c, 0xffffffffu, 3);
+    }
+    rc_last_error = ERROR_INVALID_PARAMETER;
+    RC_RETURN(c, 0, 3);
+}
+
+/* CreateProcessA(app, cmdline, …, startup, info): no other programs run here. */
+static void k_CreateProcessA(rc_cpu *c)
+{
+    uint32_t app = RC_ARG(c, 0), cmd = RC_ARG(c, 1);
+    rc_log("kernel32: CreateProcessA(%s, %s) refused", app ? rc_str(app) : "-", cmd ? rc_str(cmd) : "-");
+    rc_last_error = 2; /* ERROR_FILE_NOT_FOUND */
+    RC_RETURN(c, 0, 10);
+}
+
 static void k_FileTimeToSystemTime(rc_cpu *c)
 {
     uint32_t ft = RC_ARG(c, 0);
@@ -682,6 +731,10 @@ static void k_RtlUnwind(rc_cpu *c)
 const rc_import_def rc_k32_process[] = {
     {K32, "GetVersion", k_GetVersion},
     {K32, "GetSystemTime", k_GetSystemTime},
+    {K32, "GetSystemTimeAsFileTime", k_GetSystemTimeAsFileTime},
+    {K32, "GetSystemInfo", k_GetSystemInfo},
+    {K32, "OpenProcess", k_OpenProcess},
+    {K32, "CreateProcessA", k_CreateProcessA},
     {K32, "SystemTimeToFileTime", k_SystemTimeToFileTime},
     {K32, "CompareFileTime", k_CompareFileTime},
     {K32, "GetDateFormatA", k_GetDateFormatA},
@@ -717,6 +770,7 @@ const rc_import_def rc_k32_process[] = {
     {K32, "GetCurrentProcess", k_GetCurrentProcess},
     {K32, "GetCurrentThread", k_GetCurrentThread},
     {K32, "GetCurrentThreadId", k_GetCurrentThreadId},
+    {K32, "DisableThreadLibraryCalls", k_DisableThreadLibraryCalls},
     {K32, "CreateThread", k_CreateThread},
     {K32, "ResumeThread", k_ResumeThread},
     {K32, "SuspendThread", k_SuspendThread},

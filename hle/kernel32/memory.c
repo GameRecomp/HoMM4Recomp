@@ -242,7 +242,69 @@ static const rc_import_def global_defs[] = {
 
 void rc_k32_global_init(void) { rc_register_imports(global_defs, sizeof global_defs / sizeof global_defs[0]); }
 
+/* GetProcessHeap(): a handle that names heap 0 (heap_of gives 0 for it). */
+static void k_GetProcessHeap(rc_cpu *c) { RC_RETURN(c, HEAP_HANDLES, 0); }
+
+#define MEM_FREE 0x10000u
+#define MEM_PRIVATE 0x20000u
+#define MEM_IMAGE 0x1000000u
+#define PAGE_NOACCESS 0x01u
+#define PAGE_READWRITE 0x04u
+#define PAGE_EXECUTE_READWRITE 0x40u
+
+/* MEMORY_BASIC_INFORMATION for `addr` at `out`: a reservation of the virtual-memory layer, the
+ * program's image, or free space up to the next 64 KiB. Returns the bytes written. */
+static uint32_t query(uint32_t addr, uint32_t out, uint32_t len)
+{
+    if (len < 28) {
+        rc_last_error = 24; /* ERROR_BAD_LENGTH */
+        return 0;
+    }
+    uint32_t page = addr & ~(RC_PAGE - 1);
+    uint32_t base, size, state = MEM_FREE, type = 0, protect = PAGE_NOACCESS, alloc = 0, aprot = 0;
+    uint32_t region = RC_VM_GRANULE - (page & (RC_VM_GRANULE - 1));
+    uint32_t img = rc_proc.image_base, img_size = rc_ld32(img + rc_ld32(img + 0x3c) + 0x50);
+    if (page >= img && page < img + img_size) {
+        alloc = img;
+        state = MEM_COMMIT;
+        type = MEM_IMAGE;
+        protect = aprot = PAGE_EXECUTE_READWRITE;
+        region = img + img_size - page;
+    } else if (rc_vm_region(page, &base, &size)) {
+        alloc = base;
+        type = MEM_PRIVATE;
+        aprot = PAGE_READWRITE;
+        bool committed = rc_vm_committed(page, RC_PAGE);
+        state = committed ? MEM_COMMIT : MEM_RESERVE;
+        protect = committed ? PAGE_READWRITE : 0;
+        uint32_t end = page + RC_PAGE;
+        while (end < base + size && rc_vm_committed(end, RC_PAGE) == committed) {
+            end += RC_PAGE;
+        }
+        region = end - page;
+    }
+    rc_st32(out + 0, page);
+    rc_st32(out + 4, alloc);
+    rc_st32(out + 8, aprot);
+    rc_st32(out + 12, region);
+    rc_st32(out + 16, state);
+    rc_st32(out + 20, protect);
+    rc_st32(out + 24, type);
+    return 28;
+}
+
+/* VirtualQuery(addr, info, len), VirtualQueryEx(process, addr, info, len) */
+static void k_VirtualQuery(rc_cpu *c) { RC_RETURN(c, query(RC_ARG(c, 0), RC_ARG(c, 1), RC_ARG(c, 2)), 3); }
+static void k_VirtualQueryEx(rc_cpu *c) { RC_RETURN(c, query(RC_ARG(c, 1), RC_ARG(c, 2), RC_ARG(c, 3)), 4); }
+/* Nothing is ever paged out. */
+static void k_VirtualLock(rc_cpu *c) { RC_RETURN(c, 1, 2); }
+
 const rc_import_def rc_k32_memory[] = {
+    {K32, "GetProcessHeap", k_GetProcessHeap},
+    {K32, "VirtualQuery", k_VirtualQuery},
+    {K32, "VirtualQueryEx", k_VirtualQueryEx},
+    {K32, "VirtualLock", k_VirtualLock},
+    {K32, "VirtualUnlock", k_VirtualLock},
     {K32, "IsBadReadPtr", k_IsBadReadPtr},
     {K32, "IsBadCodePtr", k_IsBadCodePtr},
     {K32, "HeapCreate", k_HeapCreate},

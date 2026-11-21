@@ -47,6 +47,10 @@ void rc_set_pointer_map(void (*fn)(int *x, int *y));
 /* What the last pointer event came from (rc_event_source). */
 int rc_input_source(void);
 
+/* kernel32's wait for one (or all) of `n` handles, or for `extra(ctx)` to become true, which
+ * returns WAIT_OBJECT_0 + n (MsgWaitForMultipleObjects). */
+uint32_t rc_k32_wait(const uint32_t *h, uint32_t n, bool all, uint32_t timeout, bool (*extra)(void *), void *ctx);
+
 /* DirectDraw's display mode (0 x 0 before one is set). */
 void rc_ddraw_mode(uint32_t *w, uint32_t *h);
 /* Whether a DirectDraw primary surface exists (the program shows itself through DirectDraw). */

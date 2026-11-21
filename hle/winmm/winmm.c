@@ -18,6 +18,9 @@ static void k_timeGetTime(rc_cpu *c)
     RC_RETURN(c, (uint32_t)rc_ticks_ms(), 0);
 }
 
+/* timeBeginPeriod(ms), timeEndPeriod(ms): the clock is always exact to the millisecond. */
+static void k_timePeriod(rc_cpu *c) { RC_RETURN(c, 0, 1); }
+
 static void k_waveOutOpen(rc_cpu *c) { RC_RETURN(c, MMSYSERR_NODRIVER, 6); }
 
 /* Calls on a device that cannot have been opened. */
@@ -27,6 +30,8 @@ static void k_waveOut3(rc_cpu *c) { RC_RETURN(c, MMSYSERR_NODRIVER, 3); }
 
 const rc_import_def rc_winmm_defs[] = {
     {WMM, "timeGetTime", k_timeGetTime},
+    {WMM, "timeBeginPeriod", k_timePeriod},
+    {WMM, "timeEndPeriod", k_timePeriod},
     {WMM, "waveOutOpen", k_waveOutOpen},
     {WMM, "waveOutClose", k_waveOut1},
     {WMM, "waveOutReset", k_waveOut1},

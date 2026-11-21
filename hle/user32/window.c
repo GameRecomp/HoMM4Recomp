@@ -2820,6 +2820,20 @@ static void k_GetMonitorInfoA(rc_cpu *c)
     RC_RETURN(c, 1, 2);
 }
 
+
+/* GetWindowThreadProcessId(hwnd, pid): the window's thread; the process is always 1. */
+static void k_GetWindowThreadProcessId(rc_cpu *c)
+{
+    uint32_t pid = RC_ARG(c, 1);
+    if (pid) {
+        rc_st32(pid, 1);
+    }
+    RC_RETURN(c, rc_wnd_thread(RC_ARG(c, 0)), 2);
+}
+
+/* ChangeDisplaySettingsA(mode, flags): the display is the window; any mode is fine. */
+static void k_ChangeDisplaySettingsA(rc_cpu *c) { RC_RETURN(c, 0, 2); } /* DISP_CHANGE_SUCCESSFUL */
+
 const rc_import_def rc_user32_windows[] = {
     {U32, "MonitorFromWindow", k_MonitorFromWindow},
     {U32, "MonitorFromPoint", k_MonitorFromPoint},
@@ -2907,6 +2921,8 @@ const rc_import_def rc_user32_windows[] = {
     {U32, "GetMenu", k_GetMenu},
     {U32, "DrawMenuBar", k_DrawMenuBar},
     {U32, "GetSystemMetrics", k_GetSystemMetrics},
+    {U32, "GetWindowThreadProcessId", k_GetWindowThreadProcessId},
+    {U32, "ChangeDisplaySettingsA", k_ChangeDisplaySettingsA},
     {U32, "SystemParametersInfoA", k_SystemParametersInfoA},
 };
 const uint32_t rc_user32_windows_count = sizeof rc_user32_windows / sizeof rc_user32_windows[0];

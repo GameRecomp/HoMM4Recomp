@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "k32.h"
+#include "rc/hle_modules.h"
 #include "rc/log.h"
 #include "rc/thread.h"
 
@@ -162,11 +163,15 @@ static bool ready(uint32_t h, bool take)
     return true;
 }
 
-/* Wait for one of `n` handles (all of them with `all`). */
-static uint32_t wait(const uint32_t *h, uint32_t n, bool all, uint32_t timeout)
+/* Wait for one of `n` handles (all of them with `all`), or for `extra` (user32's input for
+ * MsgWaitForMultipleObjects), which gives WAIT_OBJECT_0 + n. */
+uint32_t rc_k32_wait(const uint32_t *h, uint32_t n, bool all, uint32_t timeout, bool (*extra)(void *), void *ctx)
 {
     uint64_t start = rc_ticks_peek_ms();
     for (;;) {
+        if (extra && extra(ctx)) {
+            return WAIT_OBJECT_0 + n;
+        }
         if (all) {
             bool every = true;
             for (uint32_t i = 0; i < n && every; i++) {
@@ -199,6 +204,26 @@ static uint32_t wait(const uint32_t *h, uint32_t n, bool all, uint32_t timeout)
     }
 }
 
+static uint32_t wait(const uint32_t *h, uint32_t n, bool all, uint32_t timeout)
+{
+    return rc_k32_wait(h, n, all, timeout, NULL, NULL);
+}
+
+/* OpenMutexA(access, inherit, name): a mutex created before under that name. */
+static void k_OpenMutexA(rc_cpu *c)
+{
+    uint32_t name = RC_ARG(c, 2);
+    const char *n = name ? rc_str(name) : "";
+    for (uint32_t i = 1; *n && i < OBJECTS; i++) {
+        if (objs[i].kind == O_MUTEX && strcmp(objs[i].name, n) == 0) {
+            rc_last_error = ERROR_SUCCESS;
+            RC_RETURN(c, OBJ_BASE + 4 * i, 3);
+        }
+    }
+    rc_last_error = 2; /* ERROR_FILE_NOT_FOUND */
+    RC_RETURN(c, 0, 3);
+}
+
 static void k_WaitForSingleObject(rc_cpu *c)
 {
     uint32_t h = RC_ARG(c, 0);
@@ -226,6 +251,7 @@ const rc_import_def rc_k32_sync[] = {
     {K32, "SetEvent", k_SetEvent},
     {K32, "ResetEvent", k_ResetEvent},
     {K32, "CreateMutexA", k_CreateMutexA},
+    {K32, "OpenMutexA", k_OpenMutexA},
     {K32, "ReleaseMutex", k_ReleaseMutex},
     {K32, "WaitForSingleObject", k_WaitForSingleObject},
     {K32, "WaitForMultipleObjects", k_WaitForMultipleObjects},

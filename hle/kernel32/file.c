@@ -205,6 +205,9 @@ typedef struct handle {
     entry *list;
     uint32_t count, next;
     uint32_t file; /* a mapping: the file handle it maps */
+    /* A mapping of no file (page-file backed, shared by name): its memory and size. */
+    uint32_t shared, shared_size;
+    char map_name[64];
     /* A file's position when known without asking the C library (games ask
      * for it, and set it to where it is, many times a frame; each would be
      * a system call): set by SetFilePointer, moved by ReadFile, forgotten
@@ -893,18 +896,65 @@ static void k_CreateDirectoryA(rc_cpu *c)
 }
 
 /* ---- file mappings: a view is a copy of the file in guest memory, written
- * back when it is unmapped if it may be written ---- */
+ * back when it is unmapped if it may be written. A mapping of no file
+ * (INVALID_HANDLE_VALUE: page-file backed memory) is one block that every
+ * view and every handle of the same name share. ---- */
 
 #define FILE_MAP_WRITE 2u
 #define VIEWS 64
 static struct view {
     uint32_t addr, size, offset, file;
     bool write;
+    bool vm; /* placed where MapViewOfFileEx asked: a reservation of its own */
 } views[VIEWS];
 
+/* The mapping named `name` (of no file), if any. */
+static handle *named_mapping(const char *name)
+{
+    for (uint32_t i = 1; name && *name && i < HANDLES; i++) {
+        if (handles[i].kind == K_MAPPING && handles[i].shared && strcmp(handles[i].map_name, name) == 0) {
+            return &handles[i];
+        }
+    }
+    return NULL;
+}
+
+/* A new handle for the same memory as the named mapping `m`. */
+static uint32_t share_mapping(const handle *m)
+{
+    handle copy = *m;
+    uint32_t h = new_handle(K_MAPPING);
+    *get(h, K_MAPPING) = copy;
+    return h;
+}
+
+/* CreateFileMappingA(file, security, protect, size high, size low, name) */
 static void k_CreateFileMappingA(rc_cpu *c)
 {
-    uint32_t fh = RC_ARG(c, 0);
+    uint32_t fh = RC_ARG(c, 0), size = RC_ARG(c, 4), name = RC_ARG(c, 5);
+    const char *n = name ? rc_str(name) : NULL;
+    if (fh == 0xffffffffu) {
+        handle *old = named_mapping(n);
+        if (old) {
+            uint32_t h = share_mapping(old);
+            rc_last_error = 183; /* ERROR_ALREADY_EXISTS */
+            RC_RETURN(c, h, 6);
+        }
+        uint32_t mem = size ? rc_heap_alloc(size, true) : 0;
+        if (!mem) {
+            rc_last_error = ERROR_NOT_ENOUGH_MEMORY;
+            RC_RETURN(c, 0, 6);
+        }
+        uint32_t h = new_handle(K_MAPPING);
+        handle *m = get(h, K_MAPPING);
+        m->shared = mem;
+        m->shared_size = size;
+        if (n) {
+            strncpy(m->map_name, n, sizeof m->map_name - 1);
+        }
+        rc_last_error = ERROR_SUCCESS;
+        RC_RETURN(c, h, 6);
+    }
     if (!get(fh, K_FILE)) {
         rc_last_error = ERROR_INVALID_HANDLE;
         RC_RETURN(c, 0, 6);
@@ -915,14 +965,34 @@ static void k_CreateFileMappingA(rc_cpu *c)
     RC_RETURN(c, h, 6);
 }
 
-static void k_MapViewOfFile(rc_cpu *c)
+/* OpenFileMappingA(access, inherit, name): a page-file mapping created under that name. */
+static void k_OpenFileMappingA(rc_cpu *c)
 {
-    handle *m = get(RC_ARG(c, 0), K_MAPPING);
-    uint32_t access = RC_ARG(c, 1), offset = RC_ARG(c, 3), n = RC_ARG(c, 4);
+    uint32_t name = RC_ARG(c, 2);
+    handle *m = named_mapping(name ? rc_str(name) : NULL);
+    if (!m) {
+        rc_last_error = 2; /* ERROR_FILE_NOT_FOUND */
+        RC_RETURN(c, 0, 3);
+    }
+    rc_last_error = ERROR_SUCCESS;
+    RC_RETURN(c, share_mapping(m), 3);
+}
+
+/* A view of `n` bytes at `offset` (n = 0: to the end), at `base` if not 0. */
+static uint32_t map_view(uint32_t mh, uint32_t access, uint32_t offset, uint32_t n, uint32_t base)
+{
+    handle *m = get(mh, K_MAPPING);
+    if (m && m->shared) {
+        if (offset > m->shared_size || base) {
+            rc_last_error = ERROR_INVALID_PARAMETER;
+            return 0;
+        }
+        return m->shared + offset;
+    }
     handle *x = m ? get(m->file, K_FILE) : NULL;
     if (!x) {
         rc_last_error = ERROR_INVALID_HANDLE;
-        RC_RETURN(c, 0, 5);
+        return 0;
     }
     long at = ftell(x->f);
     fseek(x->f, 0, SEEK_END);
@@ -936,18 +1006,33 @@ static void k_MapViewOfFile(rc_cpu *c)
             slot = i;
         }
     }
-    uint32_t addr = slot >= 0 && n ? rc_heap_alloc(n, true) : 0;
-    if (!addr) {
+    uint32_t addr = 0;
+    if (slot >= 0 && n) {
+        addr = base ? rc_vm_alloc(base, n, true) : rc_heap_alloc(n, true);
+    }
+    if (!addr || (base && addr != base)) {
         fseek(x->f, at, SEEK_SET);
-        rc_last_error = ERROR_NOT_ENOUGH_MEMORY;
-        RC_RETURN(c, 0, 5);
+        rc_last_error = base ? 487u /* ERROR_INVALID_ADDRESS */ : ERROR_NOT_ENOUGH_MEMORY;
+        return 0;
     }
     fseek(x->f, (long)offset, SEEK_SET);
     size_t got = rc_host_fread(rc_ptr(addr), n, x->f);
     (void)got;
     fseek(x->f, at, SEEK_SET);
-    views[slot] = (struct view){addr, n, offset, m->file, (access & FILE_MAP_WRITE) != 0};
-    RC_RETURN(c, addr, 5);
+    views[slot] = (struct view){addr, n, offset, m->file, (access & FILE_MAP_WRITE) != 0, base != 0};
+    return addr;
+}
+
+/* MapViewOfFile(mapping, access, offset high, offset low, size) */
+static void k_MapViewOfFile(rc_cpu *c)
+{
+    RC_RETURN(c, map_view(RC_ARG(c, 0), RC_ARG(c, 1), RC_ARG(c, 3), RC_ARG(c, 4), 0), 5);
+}
+
+/* MapViewOfFileEx(mapping, access, offset high, offset low, size, base) */
+static void k_MapViewOfFileEx(rc_cpu *c)
+{
+    RC_RETURN(c, map_view(RC_ARG(c, 0), RC_ARG(c, 1), RC_ARG(c, 3), RC_ARG(c, 4), RC_ARG(c, 5)), 6);
 }
 
 static void k_UnmapViewOfFile(rc_cpu *c)
@@ -963,8 +1048,19 @@ static void k_UnmapViewOfFile(rc_cpu *c)
                 fseek(x->f, at, SEEK_SET);
                 SAVED();
             }
-            rc_heap_free(addr);
+            if (views[i].vm) {
+                rc_vm_release(addr);
+            } else {
+                rc_heap_free(addr);
+            }
             views[i].addr = 0;
+            RC_RETURN(c, 1, 1);
+        }
+    }
+    /* A view of a page-file mapping stays as long as the memory. */
+    for (uint32_t i = 1; i < HANDLES; i++) {
+        handle *m = &handles[i];
+        if (m->kind == K_MAPPING && m->shared && addr >= m->shared && addr < m->shared + m->shared_size) {
             RC_RETURN(c, 1, 1);
         }
     }
@@ -977,6 +1073,8 @@ const rc_import_def rc_k32_file[] = {
     {K32, "CreateDirectoryA", k_CreateDirectoryA},
     {K32, "CreateFileMappingA", k_CreateFileMappingA},
     {K32, "MapViewOfFile", k_MapViewOfFile},
+    {K32, "MapViewOfFileEx", k_MapViewOfFileEx},
+    {K32, "OpenFileMappingA", k_OpenFileMappingA},
     {K32, "UnmapViewOfFile", k_UnmapViewOfFile},
     {K32, "GetStdHandle", k_GetStdHandle},
     {K32, "SetStdHandle", k_SetStdHandle},

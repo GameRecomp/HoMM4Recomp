@@ -21,6 +21,9 @@ static void k_CoInitialize(rc_cpu *c) { RC_RETURN(c, S_OK, 1); }
 
 static void k_CoUninitialize(rc_cpu *c) { RC_RETURN(c, 0, 0); }
 
+/* CoInitializeEx(reserved, model): as CoInitialize; the threading model does not matter here. */
+static void k_CoInitializeEx(rc_cpu *c) { RC_RETURN(c, S_OK, 2); }
+
 static void guid(uint32_t p, char *out, size_t n)
 {
     snprintf(out, n, "{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}", rc_ld32(p), rc_ld16(p + 4),
@@ -86,6 +89,7 @@ static void k_CoCreateGuid(rc_cpu *c)
 const rc_import_def rc_ole32_defs[] = {
     {OLE, "CoCreateGuid", k_CoCreateGuid},
     {OLE, "CoInitialize", k_CoInitialize},
+    {OLE, "CoInitializeEx", k_CoInitializeEx},
     {OLE, "CoUninitialize", k_CoUninitialize},
     {OLE, "CoCreateInstance", k_CoCreateInstance},
 };
