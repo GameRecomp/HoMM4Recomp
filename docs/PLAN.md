@@ -301,9 +301,12 @@ Binary treatment (first proposal, see M2 and M6):
 
 ### M13 – Polish
 
+- [x] The game's own resolutions (800×600, 1024×768, 1280×1024) switch at run time through its settings
+      (scenario `resolution`); settings and high scores screens open
 - [ ] Resolutions following the window and widescreen (the adventure map can show more; the UI screens are
       fixed-size and centred), as patches in `games/heroes4/patches.c` with manifest patch points
-- [ ] Integer and smooth scaling, hardware cursor, fps limit (shared `settings.ini`)
+- [ ] Integer and smooth scaling, hardware cursor, fps limit (shared `settings.ini`: present from the shared
+      platform layer, not yet checked by eye with this game)
 - [ ] Faster AI turns (profiling the lifted code; optional "skip AI animation" if the game has no such option)
 - [ ] Performance pass: hot functions in the AI and pathfinding, `-O2` vs. Cranelift vs. wasm
 

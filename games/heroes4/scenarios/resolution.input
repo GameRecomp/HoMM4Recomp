@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# Options, Settings: 1280x1024 chosen and confirmed. Coordinates at 1024x768.
+220 key 27
+222 keyup 27
+300 key 27
+302 keyup 27
+380 move 512 384
+382 down 1
+384 up 1
+460 key 27
+462 keyup 27
+700 move 895 360
+720 down 1
+724 up 1
+800 move 640 452
+810 down 1
+814 up 1
+1000 move 312 270
+1010 down 1
+1014 up 1
+1100 move 795 607
+1110 down 1
+1114 up 1
