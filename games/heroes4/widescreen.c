@@ -29,6 +29,7 @@
  * first), the summary 2 bits for each 32 pixels (0 transparent, 1 opaque, 2 both, 3 partly).
  */
 #include <stdbool.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -170,6 +171,32 @@ static void screen_window(rc_cpu *c)
     }
 }
 
+/* The mage guild's dialog compares the screen's width (ESI) with 1024 (0x75fa98): its 800x600 form
+ * below, its _1024 layout at 1024, else _1280; the comparison sees the class's width, and right
+ * after it (both ways, 0x75faa4 and 0x75fe2a) ESI is the screen's again, by which the dialog
+ * centres itself. */
+static uint32_t guild_width;
+static bool guild_small; /* the 800x600 way (0x75fe2a), whose rectangle centre_800 centres */
+
+static void mage_guild_compare(rc_cpu *c)
+{
+    int32_t w, h;
+    int k;
+    if (wide_mode(&w, &h, &k) && (int32_t)c->r[RC_ESI] == w) {
+        guild_width = c->r[RC_ESI];
+        c->r[RC_ESI] = (uint32_t)class_w[k];
+    }
+}
+
+static void mage_guild_compared(rc_cpu *c)
+{
+    guild_small = c->eip == 0x0075fe2a;
+    if (guild_width) {
+        c->r[RC_ESI] = guild_width;
+        guild_width = 0;
+    }
+}
+
 /* The adventure map view's offset for 800x600 things over the map (0x4a35ed: after its switch). */
 static void map_view_offset(rc_cpu *c)
 {
@@ -194,26 +221,29 @@ static void town_screen(rc_cpu *c)
     }
 }
 
-/* The town's picture window is made at the left edge of the layout's town_image, not at 0
- * (0x8b6835, after `xor edx, edx`: EDX is the x argument; the town function keeps the layer's
- * left at [ESP + 0x2c] here). */
+/* The town's picture window is made at the left edge of the screen's middle, not at 0 (0x8b6835,
+ * after `xor edx, edx`: EDX is the x argument; Verok passes the town_image layer's left, which the
+ * 1024 layout has and the 1280 one has not). */
 static void town_picture(rc_cpu *c)
 {
     int32_t w, h;
     int k;
     if (wide_mode(&w, &h, &k)) {
-        c->r[RC_EDX] = rc_ld32(c->r[RC_ESP] + 0x2c);
+        /* where the layout's town_image now begins: the middle (the 1280 layout has none) */
+        c->r[RC_EDX] = (uint32_t)((w - class_w[k]) / 2);
     }
 }
 
-/* A rectangle at [ESP + off] that spans the screen becomes an 800x600 one in its middle (a town
- * dialog, 0x75fe42). */
+/* A rectangle at [ESP + 0x2c] that spans the screen becomes an 800x600 one in its middle (the mage
+ * guild's 800x600 way, 0x75fe42). */
 static void centre_800(rc_cpu *c)
 {
     int32_t w, h;
     int k;
-    if (!wide_mode(&w, &h, &k)) {
-        return;
+    bool small = guild_small;
+    guild_small = false;
+    if (!small || !wide_mode(&w, &h, &k)) {
+        return; /* (the _1024 and _1280 ways keep the screen's rectangle) */
     }
     uint32_t r = c->r[RC_ESP] + 0x2c;
     int32_t l = (int32_t)rc_ld32(r), t = (int32_t)rc_ld32(r + 4);
@@ -526,8 +556,8 @@ static uint8_t darkest(const layer *L)
     uint32_t pal = rc_ld32(L->at + 0x5c), end = rc_ld32(L->at + 0x60);
     uint32_t n = pal && end > pal ? (end - pal) / 3 : 0;
     const uint8_t *p = pal ? rc_ptr(pal) : NULL;
-    uint32_t best = 0, best_sum = UINT32_MAX;
-    for (uint32_t i = 0; i < n; i++) {
+    uint32_t best = 1, best_sum = UINT32_MAX;
+    for (uint32_t i = 1; i < n; i++) { /* not 0: transparent in type 1 layers */
         uint32_t s = (uint32_t)p[3 * i] + p[3 * i + 1] + p[3 * i + 2];
         if (s < best_sum) {
             best_sum = s;
@@ -580,10 +610,12 @@ static bool calm_patch(const layer *L, const uint8_t *rows, const uint8_t *pix, 
     int32_t *lum = malloc(sizeof *lum * (size_t)ow * (size_t)oh);
     double *sum = calloc((size_t)(ow + 1) * (size_t)(oh + 1), sizeof *sum);
     double *bright = calloc((size_t)(ow + 1) * (size_t)(oh + 1), sizeof *bright);
-    if (!lum || !sum || !bright) {
+    double *square = calloc((size_t)(ow + 1) * (size_t)(oh + 1), sizeof *square);
+    if (!lum || !sum || !bright || !square) {
         free(lum);
         free(sum);
         free(bright);
+        free(square);
         return false;
     }
     for (int32_t y = 0; y < oh; y++) {
@@ -606,11 +638,13 @@ static bool calm_patch(const layer *L, const uint8_t *rows, const uint8_t *pix, 
             } else {
                 int32_t right = x + 1 < ow ? lum[y * ow + x + 1] : v, down = y + 1 < oh ? lum[(y + 1) * ow + x] : v;
                 g = (right < 0 ? 0 : abs(v - right)) + (down < 0 ? 0 : abs(v - down));
-                g = g > 90 ? 50 * g : g; /* a line (a frame, a scroll's rod) counts far more than grain */
+                g = g > 60 ? 50 * g : g; /* a line (a frame, a scroll's rod, an ornament) counts far more than grain */
             }
             sum[(y + 1) * (ow + 1) + x + 1] = g + sum[y * (ow + 1) + x + 1] + sum[(y + 1) * (ow + 1) + x] - sum[y * (ow + 1) + x];
             bright[(y + 1) * (ow + 1) + x + 1] = (v < 0 ? 0 : v) + bright[y * (ow + 1) + x + 1] +
                                                  bright[(y + 1) * (ow + 1) + x] - bright[y * (ow + 1) + x];
+            square[(y + 1) * (ow + 1) + x + 1] = (v < 0 ? 0.0 : (double)v * v) + square[y * (ow + 1) + x + 1] +
+                                                 square[(y + 1) * (ow + 1) + x] - square[y * (ow + 1) + x];
         }
     }
     /* as bright as the picture is on the whole: not a scroll's light inside */
@@ -618,7 +652,10 @@ static bool calm_patch(const layer *L, const uint8_t *rows, const uint8_t *pix, 
     for (int32_t y = 0; y + ph <= oh; y += 4) {
         for (int32_t x = 0; x + pw <= ow; x += 4) {
 #define BOX(t) (t[(y + ph) * (ow + 1) + x + pw] - t[y * (ow + 1) + x + pw] - t[(y + ph) * (ow + 1) + x] + t[y * (ow + 1) + x])
-            double v = BOX(sum) + 0.25 * fabs(BOX(bright) / area - mean) * area;
+            /* changes from pixel to pixel, light and dark patches (the variance), and a brightness
+             * unlike the whole */
+            double m = BOX(bright) / area, var = BOX(square) / area - m * m;
+            double v = BOX(sum) + var / 40.0 * area + 0.25 * fabs(m - mean) * area;
 #undef BOX
             if (best < 0 || v < best) {
                 best = v;
@@ -630,7 +667,90 @@ static bool calm_patch(const layer *L, const uint8_t *rows, const uint8_t *pix, 
     free(lum);
     free(sum);
     free(bright);
+    free(square);
     return best >= 0;
+}
+
+/* The texture for the sides of the centred screens: the calmest part of the adventure screen's
+ * panel (its parchment), taken when that layout is read (always before a town or a battle), as
+ * colours. */
+static uint8_t side_rgb[128 * 128 * 3];
+static int32_t side_w, side_h;
+
+static void keep_side_texture(const layer *L)
+{
+    int32_t ow = L->r - L->l, oh = L->b - L->t, px, py;
+    if (ow < 16 || oh < 16 || !rc_ld32(L->at + 0x30) || !rc_ld32(L->at + 0x5c)) {
+        return;
+    }
+    const uint8_t *rows = rc_ptr(rc_ld32(L->at + 0x30)), *pix = rc_ptr(rc_ld32(L->at + 0x54));
+    const uint8_t *pal = rc_ptr(rc_ld32(L->at + 0x5c));
+    /* small: the panel's parchment has a printed ornament about every 40 pixels; a patch between
+     * them is plain grain, which reflects without a pattern showing */
+    int32_t pw = ow / 2 < 48 ? ow / 2 : 48, ph = oh / 2 < 48 ? oh / 2 : 48;
+    if (!calm_patch(L, rows, pix, pw, ph, &px, &py)) {
+        return;
+    }
+    for (int32_t y = 0; y < ph; y++) {
+        row r = row_at(rows, (uint32_t)(py + y));
+        for (int32_t x = 0; x < pw; x++) {
+            uint32_t col = (uint32_t)(px + x), i = col >= r.x0 && col < r.x1 ? pix[r.off + col - r.x0] : 0;
+            memcpy(side_rgb + 3 * (y * pw + x), pal + 3 * i, 3);
+        }
+    }
+    /* evened out: each pixel scaled by the whole's brightness over its surroundings' (12 pixels
+     * about it, the patch reflected at its edges as it is laid), so that no light or dark patch
+     * repeats over the sides, only the grain */
+    double whole = 0;
+    double *lum = malloc(sizeof *lum * (size_t)pw * (size_t)ph);
+    if (lum) {
+        for (int32_t i = 0; i < pw * ph; i++) {
+            lum[i] = side_rgb[3 * i] + side_rgb[3 * i + 1] + side_rgb[3 * i + 2];
+            whole += lum[i];
+        }
+        whole /= (double)pw * ph;
+        uint8_t *out = malloc((size_t)pw * (size_t)ph * 3);
+        for (int32_t y = 0; out && y < ph; y++) {
+            for (int32_t x = 0; x < pw; x++) {
+                double local = 0;
+                int32_t k = 0;
+                for (int32_t v = -12; v <= 12; v += 3) {
+                    for (int32_t u = -12; u <= 12; u += 3) {
+                        local += lum[mirror(y + v, ph) * pw + mirror(x + u, pw)];
+                        k++;
+                    }
+                }
+                local /= k;
+                double f = local > 1 ? whole / local : 1;
+                for (int32_t c3 = 0; c3 < 3; c3++) {
+                    double v = side_rgb[3 * (y * pw + x) + c3] * f;
+                    out[3 * (y * pw + x) + c3] = (uint8_t)(v > 255 ? 255 : v);
+                }
+            }
+        }
+        if (out) {
+            memcpy(side_rgb, out, (size_t)pw * (size_t)ph * 3);
+            free(out);
+        }
+        free(lum);
+    }
+    side_w = pw;
+    side_h = ph;
+}
+
+/* The palette index (not 0) nearest to a colour. */
+static uint8_t nearest(const uint8_t *pal, uint32_t n, const uint8_t *rgb)
+{
+    uint32_t best = 1, best_d = UINT32_MAX;
+    for (uint32_t i = 1; i < n; i++) {
+        int32_t a = pal[3 * i] - rgb[0], b = pal[3 * i + 1] - rgb[1], c3 = pal[3 * i + 2] - rgb[2];
+        uint32_t d = (uint32_t)(a * a + b * b + c3 * c3);
+        if (d < best_d) {
+            best_d = d;
+            best = i;
+        }
+    }
+    return (uint8_t)best;
 }
 
 /* The background as large as the screen (0, 0, w, h): the old one moved by `dx`; the screen's
@@ -654,6 +774,15 @@ static void widen_background(rc_cpu *c, layer *L, int32_t dx, int32_t w, int32_t
     bool picture = ow > 8 && full * 2 > oh;
     uint8_t dark = darkest(L);
     int32_t pw = ow / 2 < 96 ? ow / 2 : 96, ph = oh / 2 < 128 ? oh / 2 : 128, px = 0, py = 0;
+    /* the adventure panel's parchment, in this palette's nearest colours */
+    uint8_t *shared = NULL;
+    uint32_t pal = rc_ld32(L->at + 0x5c), pal_end = rc_ld32(L->at + 0x60);
+    uint32_t ncol = pal && pal_end > pal ? (pal_end - pal) / 3 : 0;
+    if (side_w && ncol > 16 && (shared = malloc((size_t)side_w * (size_t)side_h)) != NULL) {
+        for (int32_t i = 0; i < side_w * side_h; i++) {
+            shared[i] = nearest(rc_ptr(pal), ncol, side_rgb + 3 * i);
+        }
+    }
     picture = picture && pw >= 8 && ph >= 8 && calm_patch(L, rows, pix, pw, ph, &px, &py);
     pixels out;
     if (!pixels_new(&out, (uint32_t)h, (uint32_t)(w * h), alpha != NULL)) {
@@ -674,7 +803,14 @@ static void widen_background(rc_cpu *c, layer *L, int32_t dx, int32_t w, int32_t
                 continue;
             }
             bool edge = (x >= dx - 3 && x < dx) || (x >= dx + cw && x < dx + cw + 3);
-            if (!picture || (edge && !inside)) {
+            if (shared && !inside && !edge) {
+                out.pix[i] = shared[mirror(y, side_h) * side_w + mirror(x, side_w)];
+                if (out.alpha) {
+                    alpha_put(out.alpha, i, 15);
+                }
+                continue;
+            }
+            if ((!picture && !shared) || (edge && !inside)) {
                 out.pix[i] = dark;
                 if (out.alpha) {
                     alpha_put(out.alpha, i, 15);
@@ -730,6 +866,7 @@ static void widen_background(rc_cpu *c, layer *L, int32_t dx, int32_t w, int32_t
     }
     pixels_give(c, L, &out);
     pixels_free(&out);
+    free(shared);
     set_rect(L, 0, 0, w, h);
 }
 
@@ -747,6 +884,17 @@ static bool is_picture(const layer *L)
         full += r.x1 - r.x0 >= w - w / 8;
     }
     return full * 2 > h;
+}
+
+/* Two layer names alike but for case (without strcasecmp, which MSVC has not). */
+static bool same_name(const char *a, const char *b)
+{
+    for (; *a && *b; a++, b++) {
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
+            return false;
+        }
+    }
+    return *a == *b;
 }
 
 static layer *find(layer *ls, int n, const char *name)
@@ -818,6 +966,10 @@ static void layout_read(rc_cpu *c)
     if (frame && find(ls, n, "mini_map")) {
         /* the adventure screen: the right part to the right edge, the strips along the map wider */
         int32_t split = frame->l;
+        layer *panel = find(ls, n, "Right");
+        if (panel) {
+            keep_side_texture(panel);
+        }
         for (int i = 0; i < n; i++) {
             if (ls[i].l >= split) {
                 move_layer(&ls[i], dx);
@@ -828,10 +980,14 @@ static void layout_read(rc_cpu *c)
             }
         }
         rc_log("widescreen: adventure screen %dx%d to %dx%d", cw, ch, mw, mh);
-    } else {
-        /* every other screen of the class (town, combat, main menu, the intro's and a scenario's
-         * pictures): in the middle; its background as large as the screen, the pieces at the
-         * screen's left or right edge reaching on to it */
+    } else if (find(ls, n, "Town_Name") || find(ls, n, "battle_scene") ||
+               find(ls, n, "New_Game_Released") ||
+               find(ls, n, "Animation") ||
+               (n == 4 && find(ls, n, "Top") && find(ls, n, "Left") && find(ls, n, "Right") && find(ls, n, "Bottom"))) {
+        /* the screens of the class (town, combat, main menu, the intro's and a scenario's pictures;
+         * not the dialogs of the class's size, as the mage guild's, which the game centres): in the
+         * middle; its background as large as the screen, the pieces at the screen's left or right
+         * edge reaching on to it */
         int32_t half = dx / 2;
         /* what lies in the middle (neither the background nor at an edge): the new columns of the
          * pieces at the edges go in halfway between it and the edge */
@@ -842,13 +998,13 @@ static void layout_read(rc_cpu *c)
                 inner_r = ls[i].r > inner_r ? ls[i].r : inner_r;
             }
         }
-        const char *what = find(ls, n, "town_image") ? "town" : find(ls, n, "battle_scene") ? "combat"
+        const char *what = find(ls, n, "Town_Name") ? "town" : find(ls, n, "battle_scene") ? "combat"
                          : find(ls, n, "New_Game_Released") ? "main menu" : "picture";
         for (int i = 0; i < n; i++) {
             layer *L = &ls[i];
             if (!strcmp(L->name, "Background")) {
                 widen_background(c, L, half, mw, mh, cw, ch);
-            } else if (!strcmp(L->name, "town_image")) {
+            } else if (same_name(L->name, "town_image")) { /* (Town_Image in the 800 and 1280 layouts) */
                 set_rect(L, half, L->t, half + cw, L->b); /* the town's picture is as wide as the class */
             } else if ((L->l <= 0 || L->r >= cw) && is_picture(L)) {
                 /* the new columns go in between the edge and the middle's content (past a frame
@@ -901,6 +1057,9 @@ void heroes4_widescreen(void)
         rc_on_point(layout_switches[i].at, layout_switch);
     }
     rc_on_point(0x004a35ed, map_view_offset);
+    rc_on_point(0x0075fa98, mage_guild_compare);
+    rc_on_point(0x0075faa4, mage_guild_compared);
+    rc_on_point(0x0075fe2a, mage_guild_compared);
     rc_on_point(0x00773f59, screen_window);
     rc_on_point(0x004b57c6, screen_window);
     static const uint32_t town_rects[] = {0x008b40c0, 0x008b43c0, 0x008b61e9, 0x008b66fa, 0x008b6a40};

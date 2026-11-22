@@ -40,10 +40,12 @@ returns = [0x008e5aa5]   # CRT x87 argument load: returns; a second entry follow
 points = [
     0x004a3e05, # smooth scrolling: the adventure map's scroll timer interval (games/heroes4/patches.c)
     0x004a4201, # smooth scrolling: its scroll step
+    0x008d1c95, # a left button release is handed to its window (a drag is not a click; patches.c)
     # wide resolutions (widescreen.c)
     0x008d3750, # the display mode is set
     0x004a35a7, 0x004a397e, 0x004accf4, 0x004b56f1, 0x00584266, 0x0062b8da, # layout switches by width
     0x0069fbca, 0x0076da14, 0x0076e534, 0x00773e80, 0x008ac64a, 0x008c8f8f,
+    0x0075fa98, 0x0075faa4, 0x0075fe2a, # the mage guild's width comparison, and after it
     0x004a35ed, # the map view's offset for 800x600 things
     0x00773f59, 0x004b57c6, # the screen's window after a resolution change (main menu, map)
     0x008b40c0, 0x008b43c0, 0x008b61e9, 0x008b66fa, 0x008b6a40, # the town asked for the screen's rectangle

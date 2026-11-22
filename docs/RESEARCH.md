@@ -208,14 +208,39 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
 - The main window's class has `CS_DBLCLKS` (style `0xb`); the hero screen (a portrait in the panel) and
   more open on `WM_LBUTTONDBLCLK`. The user32 HLE made double clicks only for programs with child windows,
   not on its direct path for a game's main window: no double click reached the game.
+- The mage guild's dialog (`0x75f7c0`, layouts `dialog.mage_guild.<school>_1024/_1280`: a frame of four
+  pieces around `Book_Pages`) is of the class's size but a dialog the game centres; Verok left it alone, and so
+  must the screen rule. At `0x75fa98` it takes its 800×600 form below a width of 1024, the `_1024` layout at
+  exactly 1024 and `_1280` above (`0x75faa4`): a wide 768 screen got the 1280×1024 one; it is a layout
+  switch like the others.
+- Right button on the adventure map: the game gets `WM_RBUTTONDOWN` at once (window procedure `0x8d1e5e`, to
+  the window under the point, `vtable + 0x4c`) and `WM_RBUTTONUP` (`0x8d21f0`); the information box appears
+  only after the release and stays until the next click, without a key state queried in between (only
+  `GetCursorPos`). That is the game's own design, unlike its predecessors (which show it while the button is
+  held): the release goes to the window under the point (`vtable + 0x50`), and the base window's handler
+  (`0x7200a0`) opens the help box (`0x845290`) when the window has a help text (`+0x88`), else hands the
+  release to its parent; the press (`+0x4c`, `0x720050`) is only handed on.
+- The left release goes to the window under the point as a click (`0x8d1c95`, `[vtable + 0x28]`); the adventure
+  map's window (vtable `0x979bc0`) then sets the hero's path there, after a drag too. A patch point hands a
+  release that ends a drag on the map to `ret 4` (`0x40f610`).
+- The pointer: the game draws its own (`cursor.*`, e.g. `cursor.move`, `cursor.combat.melee.*`, static
+  resource references) and only polls `GetCursorPos`; no `ShowCursor` or `SetCursor`, and its window class has
+  no cursor. `0x71d850` finds the window under the pointer and `0x71d8c0` takes its pointer (`0x721740`) as the
+  current one (`[0xabacb8]`, shown and hidden by `0x71f5f0`; `0xa6db28` whether pointers are shown)
+  **(open: where the pointer object keeps its image)**.
+- The town's layouts differ by class: the picture's placeholder is `town_image` in the 1024 one and
+  `Town_Image` in the 800 and 1280 ones; `Town_Name` and `Town_list` are in all three. The picture window's
+  x (`0x8b6835`) is the screen's middle in a wide mode.
 - The 1280 adventure layout's `Top` runs on over the right frame (0–934, the frame from 880): the strips along
   the map widen where they meet the frame, not at their end.
 - Here (`games/heroes4/widescreen.c`) the game keeps its classes until it sets the mode (`0x8d3750`); the
   layout switches see the class's width again; the layouts are made wide at `0x58e467`, by rules over the
   layer names and places, the new columns continuing the strip's pattern or reflecting the picture next to
-  them; a background's sides are the calmest patch of its own picture (least change of brightness, lines
-  counting far more than grain), reflected to and fro, with a dark line along the middle, as Verok's plain
-  side panels; the places above are patch points.
+  them; a background's sides are a plain parchment, as Verok's side panels: the calmest 48×48 patch of
+  the adventure screen's panel (between its printed ornaments; lines counting far more than grain), its
+  brightness evened out, kept when that layout is read (before any town or battle) and laid reflected to and
+  fro in each background's nearest colours, with a dark line along the middle (not palette index 0, which
+  type 1 layers leave transparent); the places above are patch points.
 
 ## Open questions
 

@@ -320,6 +320,12 @@ Binary treatment (first proposal, see M2 and M6):
 - [ ] Widescreen, still open: the world view dialog (rule in place, not seen yet); heights beyond the class's
       (1920×1080 plays as 1816×1024, scaled); the main menu's sides are black (its picture is not part of its
       layout); a window resized while playing keeps the sizes until the next start
+- [x] One pointer: the game draws its own and never calls `ShowCursor`/`SetCursor`; the system's arrow no
+      longer shows over its window (`rc_wnd_own_pointer`, user32)
+- [ ] The game's pointer as the system's (hardware) pointer: its current pointer object is at `0xabacb8`
+      (`0x71d8c0` asks the window under the pointer for it); its image is to go to `rc_plat_cursor_image` and
+      the game's own drawing to stop
+- [x] A drag on the adventure map is not a click (the release would set the hero's path; `patches.c`)
 - [ ] Integer and smooth scaling, hardware cursor, fps limit (shared `settings.ini`: present from the shared
       platform layer, not yet checked by eye with this game)
 - [x] Smooth map scrolling, opt-in (`smooth_scroll` in `settings.ini`: 16 ms steps of 8 pixels instead of
