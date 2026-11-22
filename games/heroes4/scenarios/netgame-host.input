@@ -45,3 +45,15 @@
 2500 move 808 642
 2510 down 1
 2514 up 1
+# on the adventure map: close the opening message, end the turn (hourglass, confirm that a hero
+# could still move); stay until the joining program is done
+3600 move 512 445
+3610 down 1
+3614 up 1
+3700 move 967 733
+3710 down 1
+3714 up 1
+3850 move 867 666
+3860 down 1
+3864 up 1
+6000 wait @SYNC@/join-done.bmp

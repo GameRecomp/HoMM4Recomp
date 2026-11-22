@@ -72,3 +72,5 @@
 2510 down 1
 2514 up 1
 2600 shot @SYNC@/joined.bmp
+# its turn comes; tell the host it is done (the host stays until then)
+7900 shot @SYNC@/join-done.bmp

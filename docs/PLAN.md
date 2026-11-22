@@ -265,7 +265,8 @@ Binary treatment (first proposal, see M2 and M6):
 - [x] Both players take a slot (the box at the right of a slot the map leaves to humans), tick Ready, the host
       starts: both programs are on the adventure map, the joining one with the game it received
       (`tools/run-netgame heroes4 netgame`)
-- [ ] A full network game played (turns passing between the two); on a LAN between two machines
+- [x] Turns pass: the host ends its turn, the joining player gets theirs (same scenario, three runs of three)
+- [ ] A full network game played; on a LAN between two machines
 - [ ] GameSpy: the menu entries fail cleanly; no connection attempts to dead servers (patch if needed)
 - [ ] Browser: no raw sockets — WebSocket relay or "not available" (decision when there)
 
