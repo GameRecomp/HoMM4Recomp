@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 #define NET_NAME 64
-#define NET_APPDATA 256
+#define NET_APPDATA 1024 /* Heroes IV keeps 304 bytes of game description here */
 
 typedef struct net_session {
     uint8_t instance[16], app[16];

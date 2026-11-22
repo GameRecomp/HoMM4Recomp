@@ -637,7 +637,7 @@ void net_enum_poll(void)
     if (disc == INVALID_SOCKET) {
         return;
     }
-    uint8_t r[1024];
+    uint8_t r[4 + SESS + 64];
     struct sockaddr_in from;
     socklen_t fl = sizeof from;
     int k;
