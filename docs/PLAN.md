@@ -247,7 +247,9 @@ Binary treatment (first proposal, see M2 and M6):
 
 - [x] Campaign start and first map of: the base game, *The Gathering Storm*, *Winds of War* (scenarios
       `campaign-h4`, `campaign-gs`, `campaign-wow`); playing them through is still to do
-- [ ] Linux (AppImage) and Windows (zip) shells from CI; the CLI converter for both
+- [ ] Linux (AppImage) and Windows (zip) shells from CI; the CLI converter for both. Locally from a clean export of
+      the tree, as the converter workflow's jobs do it: icons, the Linux shell and AppImage, its template, the
+      converter archive; that archive converts the installer in 2 minutes and the package reaches the main menu
 - [x] `docs/RELEASE-NOTES.md` with known issues (draft); README for players
 - [ ] English GOG installer pinned if available (another `[[variant]]`, same plan otherwise)
 
@@ -292,7 +294,11 @@ Binary treatment (first proposal, see M2 and M6):
       WebAssembly back ends as in C
 - [x] `recomp convert --template T.zip setup_….exe` (finds the `-1.bin` beside it): a Linux package of the game
       and its editor in 2 minutes
-- [ ] Windows, macOS and Android shells and templates built in CI (no Android SDK here; CI has never run)
+- [ ] Windows, macOS and Android shells and templates built in CI (no Android SDK here; CI has never run: this
+      machine cannot push). Checked so far: every step of `ci.yml` passes locally (audit, fmt, clippy, tests,
+      difftest, the `ci` preset with gcc and clang from a clean export); the code changed since CulturesRecomp's
+      last green CI (Windows, macOS, Android) reviewed for portability (one POSIX-only call fixed in `rib.c`);
+      `tools/check-windows` builds everything for Windows warning-free and the runtime tests pass under Wine
 - [x] Browser page: picks both files, reads the 1 GB slice in streamed blocks, stores the unpacked game in the
       origin's storage (OPFS); shown in headless Chromium: conversion in 2½ minutes, then the player runs the
       intro, the main menu, the New Game menu (C++ exceptions) and the scenario list

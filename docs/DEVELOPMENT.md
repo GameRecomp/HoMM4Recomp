@@ -41,6 +41,11 @@ build/dev/games/heroes4/homm4-heroes4 --game-dir orig/heroes4/gog-de
 build/dev/games/heroes4/homm4-heroes4 --check --game-dir orig/heroes4/gog-de   # imports the HLE layer lacks
 RC_TRACE=imports build/dev/games/heroes4/homm4-heroes4 …                         # every API call
 SDL_VIDEO_DRIVER=dummy RC_CLOCK=virtual RC_INPUT=script.txt RC_SCREENSHOT=300:a.bmp RC_FRAMES=310 …   # scripted
+tools/run-scenario heroes4 firstturn      # a scripted run, compared with the accepted one
+tools/run-netgame heroes4 netgame         # two programs, a network game
+
+# Windows without Windows (Docker): MinGW-w64 cross build, warnings as errors, tests under Wine
+tools/check-windows
 ```
 
 Put your own game files in `orig/` (git-ignored).

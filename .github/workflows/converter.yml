@@ -1,12 +1,10 @@
 # SPDX-License-Identifier: MIT
-# The converter site, as in TropicoRecomp: the game shells of the five
-# Heroes of Might and Magic IV for Windows, Linux, macOS and Android and the web shells of
-# the four sold as GOG installers, for playing in the browser (no game code
-# in any of them),
-# for the systems platforms.json has on, the converter compiled to
-# WebAssembly, and the pages,
-# published to GitHub Pages. Pages must be enabled with "GitHub Actions" as
-# its source.
+# The converter site, as in TropicoRecomp and CulturesRecomp: the game shell
+# of Heroes of Might and Magic IV for Windows, Linux, macOS and Android and its
+# web shell, for playing in the browser (no game code in any of them), for the
+# systems platforms.json has on, the converter compiled to WebAssembly, and the
+# pages, published to GitHub Pages. Pages must be enabled with "GitHub Actions"
+# as its source.
 #
 # Beside the site, the recomp program for each desktop system that is on
 # (recomp-<system> artifacts), the templates, and the converter downloads:
