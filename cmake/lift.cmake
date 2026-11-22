@@ -126,9 +126,13 @@ function(rc_extract_now id)
   endif()
 endfunction()
 
-# Lift `dirs` while configuring when the target has no set file yet (`recomp lift --set`).
+# Lift `dirs` while configuring when the target has no set file yet (`recomp lift --set`), or
+# when the game's manifest is newer than it (a binary may have been added: its object library
+# must exist before the build). `id` is rc_add_game's.
 function(rc_lift_now target dirs set_file)
-  if(EXISTS "${set_file}")
+  set(manifest "${PROJECT_SOURCE_DIR}/games/${id}/game.toml")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${manifest}")
+  if(EXISTS "${set_file}" AND NOT "${manifest}" IS_NEWER_THAN "${set_file}")
     return()
   endif()
   message(STATUS "${target}: lifting ${dirs}")
