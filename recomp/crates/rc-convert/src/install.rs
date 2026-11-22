@@ -104,9 +104,7 @@ impl Install {
             .manifest
             .binaries
             .iter()
-            .find(|b| {
-                matches!(b.role, rc_manifest::Role::Main) && b.variants.contains(&self.variant)
-            })
+            .find(|b| matches!(b.role, rc_manifest::Role::Main) && b.in_variant(&self.variant))
             .map(|b| b.name.to_ascii_lowercase());
         progs.sort_by_key(|p| Some(p.exe.to_ascii_lowercase()) != main);
         Ok(progs)

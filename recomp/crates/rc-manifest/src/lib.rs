@@ -95,6 +95,11 @@ pub struct Binary {
     pub variants: Vec<String>,
     #[serde(default)]
     pub notes: Option<String>,
+    /// Other builds of this binary with the same code: they differ only in bytes no code
+    /// reaches (`recomp codediff` finds every function the same). They run this binary's
+    /// lifted code instead of being lifted themselves.
+    #[serde(default)]
+    pub aliases: Vec<Alias>,
     /// Load address for a lifted DLL whose preferred base collides with another lifted
     /// binary. The recompiler applies the relocations before discovery and lifting, and the
     /// runtime loader maps the DLL here.
@@ -108,7 +113,55 @@ pub struct Binary {
     pub patch: Patch,
 }
 
+/// Another build of a [`Binary`] with the same code (see [`Binary::aliases`]).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Alias {
+    pub size: u64,
+    pub sha256: String,
+    pub variants: Vec<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
 impl Binary {
+    /// Whether a file with hash `sha256` is this binary or one of its aliases.
+    pub fn matches(&self, sha256: &str) -> bool {
+        self.sha256 == sha256 || self.aliases.iter().any(|a| a.sha256 == sha256)
+    }
+
+    /// Whether the binary (itself or as an alias) belongs to `variant`.
+    pub fn in_variant(&self, variant: &str) -> bool {
+        self.variants.iter().any(|v| v == variant)
+            || self
+                .aliases
+                .iter()
+                .any(|a| a.variants.iter().any(|v| v == variant))
+    }
+
+    /// The hash the binary has in `variant` (its own, or an alias's).
+    pub fn sha256_in(&self, variant: &str) -> Option<&str> {
+        if self.variants.iter().any(|v| v == variant) {
+            return Some(&self.sha256);
+        }
+        self.aliases
+            .iter()
+            .find(|a| a.variants.iter().any(|v| v == variant))
+            .map(|a| a.sha256.as_str())
+    }
+
+    /// The first variant of the build with hash `sha256` (itself or an alias).
+    pub fn variant_of(&self, sha256: &str) -> Option<&str> {
+        if self.sha256 == sha256 {
+            return self.variants.first().map(String::as_str);
+        }
+        self.aliases
+            .iter()
+            .find(|a| a.sha256 == sha256)
+            .and_then(|a| a.variants.first())
+            .map(String::as_str)
+    }
+
     /// Directory name below `generated/<game>/` for this binary: the lower-case file name
     /// and the first variant, e.g. `cultures.exe-gog-en`. Unique within a game because a
     /// variant has at most one binary of each name.
@@ -348,6 +401,25 @@ pub fn validate(manifests: &[Manifest]) -> Result<(), Error> {
             if !seen.insert(b.sha256.as_str()) {
                 errs.push(format!("{g}: {} ({}) listed twice", b.name, b.sha256));
             }
+            for a in &b.aliases {
+                if !is_sha256(&a.sha256) {
+                    errs.push(format!("{g}: bad sha256 for an alias of {}", b.name));
+                }
+                if !seen.insert(a.sha256.as_str()) {
+                    errs.push(format!("{g}: {} alias ({}) listed twice", b.name, a.sha256));
+                }
+                if a.variants.is_empty() {
+                    errs.push(format!("{g}: an alias of {} has no variants", b.name));
+                }
+                for v in &a.variants {
+                    if !variant_ids.contains(v.as_str()) {
+                        errs.push(format!(
+                            "{g}: an alias of {} refers to unknown variant {v}",
+                            b.name
+                        ));
+                    }
+                }
+            }
             if b.variants.is_empty() {
                 errs.push(format!("{g}: {} has no variants", b.name));
             }
@@ -390,7 +462,7 @@ pub fn validate(manifests: &[Manifest]) -> Result<(), Error> {
             let mains = m
                 .binaries
                 .iter()
-                .filter(|b| b.role == Role::Main && b.variants.contains(&v.id))
+                .filter(|b| b.role == Role::Main && b.in_variant(&v.id))
                 .count();
             if mains != 1 {
                 errs.push(format!("{g}/{}: {mains} main executables (need 1)", v.id));
@@ -484,6 +556,19 @@ impl Catalog {
                         role: b.role,
                         treatment: b.treatment,
                     });
+                for a in &b.aliases {
+                    c.sizes.insert(a.size);
+                    c.by_hash
+                        .entry(a.sha256.clone())
+                        .or_default()
+                        .push(Hit::Binary {
+                            game: m.game.id.clone(),
+                            variants: a.variants.clone(),
+                            name: b.name.clone(),
+                            role: b.role,
+                            treatment: b.treatment,
+                        });
+                }
             }
         }
         c

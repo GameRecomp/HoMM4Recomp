@@ -114,7 +114,7 @@ for tests and CI (`RC_WITH_SDL3=OFF`). Nothing above `platform/` includes SDL he
 
 | File          | Purpose |
 |---------------|---------|
-| `game.toml`   | Manifest: variants (installers, media), pinned binaries with role, treatment and (for colliding DLLs) `base`; per binary a `[binary.discover]` table with seeds, no-return functions, data ranges and jump tables; later patches. |
+| `game.toml`   | Manifest: variants (installers, media), pinned binaries with role, treatment and (for colliding DLLs) `base`; per binary a `[binary.discover]` table with seeds, no-return functions, data ranges and jump tables, a `[binary.patch]` list of points for the game's patches, and `aliases`: other builds with the same code (hash, size, variants), which run the binary's lifted code. |
 | `CMakeLists.txt` | Calls `rc_add_game(<id> TITLE … EXES …)` from `cmake/lift.cmake`. That generates the shell's `main()` from `cmake/game_main.c.in`, and the shell calls `rc_game_main()` in `runtime/src/game.c` (arguments, locating the install, later hash check and boot). The executable is `homm4-<id>`. |
 | `patches.c` *(later)* | Hooks at guest addresses, such as skipping the CD check, larger resolutions or fixes. Every patch is opt-in or documented. |
 
@@ -122,7 +122,7 @@ for tests and CI (`RC_WITH_SDL3=OFF`). Nothing above `platform/` includes SDL he
 
 The layout is `generated/<game>/<binary>-<variant>/` (for example `generated/heroes4/heroes4.exe-gog-de/`):
 `codemap.json` from discovery, and from `recomp lift` `code_XXXX.c`, `funcs.h`, `table.c` (`<symbol>_table`) and
-`binary.c` (the `rc_generated_binary` record: name, variant, hash, base, entry, table). `recomp lift` also rewrites
+`binary.c` (the `rc_generated_binary` record: name, variant, hash, base, entry, table, the aliases' hashes). `recomp lift` also rewrites
 `generated/<game>/set.c`, the `rc_generated_set` of every binary lifted for the game so far. All binaries of a game
 link into one executable. Each gets its own symbol prefix (from its directory name, e.g. `heroes4_exe_gog_de_`),
 and the shell picks the ones whose SHA-256 matches the user's copy. `cmake/lift.cmake` compiles everything below

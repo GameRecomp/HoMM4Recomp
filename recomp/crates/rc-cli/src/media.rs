@@ -203,11 +203,7 @@ pub fn extract(
     };
     // Verify every binary the manifest pins for this variant.
     let mut bad = 0;
-    for b in m
-        .binaries
-        .iter()
-        .filter(|b| b.variants.iter().any(|x| x == v))
-    {
+    for b in m.binaries.iter().filter(|b| b.in_variant(v)) {
         let status = match find_file(&dest, &b.name) {
             None if b.treatment == Treatment::Ignore => continue,
             None => {
@@ -215,7 +211,7 @@ pub fn extract(
                 "MISSING".to_string()
             }
             Some(p) => match rc_manifest::sha256_file(&p) {
-                Ok(h) if h == b.sha256 => "ok".to_string(),
+                Ok(h) if Some(h.as_str()) == b.sha256_in(v) => "ok".to_string(),
                 Ok(h) => {
                     bad += 1;
                     format!("MISMATCH ({})", &h[..16])

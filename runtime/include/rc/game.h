@@ -33,7 +33,12 @@ typedef struct rc_generated_binary {
     uint32_t entry;              /* guest VA of the PE entry point */
     const rc_fn_entry *table;    /* lifted functions, sorted by address */
     uint32_t count;
+    const char *const *aliases;  /* hashes of other builds with the same code (the manifest's
+                                  * aliases), NULL-ended; NULL for none */
 } rc_generated_binary;
+
+/* Whether a file with SHA-256 `hash` runs the lifted binary `b` (its own hash or an alias). */
+bool rc_generated_matches(const rc_generated_binary *b, const char *hash);
 
 /* Everything lifted for one game (`set.c` below generated/<game>/). */
 typedef struct rc_generated_set {
@@ -56,6 +61,11 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
 /* The language of the install being played, as it calls itself ("English", "Deutsch", ...); NULL
  * if unknown. For a game project's patch that writes text into the game. */
 const char *rc_game_language(void);
+
+/* The build of the executable being run: the first variant of its [[binary]] in game.toml (an
+ * alias runs as the binary it is an alias of), e.g. "gog-de"; NULL if it is not lifted. For a
+ * game project's patches, whose addresses differ from build to build. */
+const char *rc_game_variant(void);
 
 #ifdef __cplusplus
 }

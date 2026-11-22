@@ -90,12 +90,25 @@ static bool same_file_name(const char *a, const char *b)
     return *a == *b;
 }
 
+bool rc_generated_matches(const rc_generated_binary *b, const char *hash)
+{
+    if (strcmp(b->sha256, hash) == 0) {
+        return true;
+    }
+    for (const char *const *a = b->aliases; a && *a; a++) {
+        if (strcmp(*a, hash) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Whether `generated` holds the executable `name` with SHA-256 `hash`. */
 static bool exe_lifted(const rc_generated_set *generated, const char *name, const char *hash)
 {
     for (size_t i = 0; generated && i < generated->count; i++) {
         const rc_generated_binary *b = generated->binaries[i];
-        if (same_file_name(b->name, name) && strcmp(b->sha256, hash) == 0) {
+        if (same_file_name(b->name, name) && rc_generated_matches(b, hash)) {
             return true;
         }
     }
@@ -252,6 +265,10 @@ static char title_suffix[64];
 static const char *game_language;
 
 const char *rc_game_language(void) { return game_language; }
+
+static const char *game_variant;
+
+const char *rc_game_variant(void) { return game_variant; }
 
 /* The language of an install, as it calls itself: GOG's goggame-*.info says it ("language"),
  * else the variant of the lifted executable ("gog-de": German); NULL if neither does. */
@@ -503,7 +520,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
             continue;
         }
         char h[65];
-        if (!hash_file(game_dir, b->name, h) || strcmp(h, b->sha256) != 0) {
+        if (!hash_file(game_dir, b->name, h) || !rc_generated_matches(b, h)) {
             continue;
         }
         lifted[nlifted].file = b->name;
@@ -514,6 +531,7 @@ int rc_game_main(const rc_game_info *game, const rc_generated_set *generated, in
         if (strcmp(h, exe_hash) == 0) {
             const char *lang = install_language(game_dir, b->variant);
             game_language = lang;
+            game_variant = b->variant;
             snprintf(title_suffix, sizeof title_suffix, lang ? " %s (%s, %s)" : " %s (%s)", RC_VERSION, RC_GIT_HASH,
                      lang ? lang : "");
         }

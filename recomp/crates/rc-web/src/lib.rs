@@ -447,8 +447,7 @@ pub fn recompile_web(file: Function, progress: Function) -> Result<Vec<u8>, JsVa
         .find(|m| m.game.id == game)
         .and_then(|m| {
             m.binaries.iter().find(|b| {
-                matches!(b.role, rc_convert::rc_manifest::Role::Main)
-                    && b.variants.contains(&variant)
+                matches!(b.role, rc_convert::rc_manifest::Role::Main) && b.in_variant(&variant)
             })
         })
         .map(|b| b.name.to_ascii_lowercase());

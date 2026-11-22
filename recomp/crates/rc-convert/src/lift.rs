@@ -41,7 +41,7 @@ pub fn find(manifests: &[Manifest], sha256: &str, prefer: &dyn Fn(&str) -> bool)
         .flat_map(|m| {
             m.binaries
                 .iter()
-                .filter(|b| b.sha256 == sha256)
+                .filter(|b| b.matches(sha256))
                 .map(|b| Known {
                     game: m.game.id.clone(),
                     binary: b.clone(),
@@ -385,10 +385,8 @@ pub fn identify<'a>(
                 let Some(data) = file(&b.name) else {
                     continue;
                 };
-                if rc_manifest::sha256_hex(&data) == b.sha256
-                    && let Some(v) = b.variants.first()
-                {
-                    return Some((m, v.clone()));
+                if let Some(v) = b.variant_of(&rc_manifest::sha256_hex(&data)) {
+                    return Some((m, v.to_string()));
                 }
             }
         }
@@ -408,7 +406,7 @@ pub fn lift_install(
     for b in m
         .binaries
         .iter()
-        .filter(|b| b.treatment == Treatment::Lift && b.variants.contains(&variant))
+        .filter(|b| b.treatment == Treatment::Lift && b.in_variant(&variant))
     {
         if !seen.insert(b.name.to_ascii_lowercase()) {
             continue;
