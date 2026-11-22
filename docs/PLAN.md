@@ -316,6 +316,8 @@ Binary treatment (first proposal, see M2 and M6):
       fixed-size and centred), as patches in `games/heroes4/patches.c` with manifest patch points
 - [ ] Integer and smooth scaling, hardware cursor, fps limit (shared `settings.ini`: present from the shared
       platform layer, not yet checked by eye with this game)
+- [x] Smooth map scrolling, opt-in (`smooth_scroll` in `settings.ini`: 16 ms steps of 8 pixels instead of
+      50 ms steps of 25, as the HeroesGL wrapper patches it)
 - [ ] Faster AI turns (profiling the lifted code; optional "skip AI animation" if the game has no such option)
 - [ ] Performance pass: hot functions in the AI and pathfinding, `-O2` vs. Cranelift vs. wasm
 

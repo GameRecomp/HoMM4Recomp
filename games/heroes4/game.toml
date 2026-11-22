@@ -36,6 +36,11 @@ seeds = [
 ]
 no_return = [0x008e2cc5] # CRT _exit: returns only for other callers of the shared doexit
 returns = [0x008e5aa5]   # CRT x87 argument load: returns; a second entry follows each call to it
+[binary.patch]
+points = [
+    0x004a3e05, # smooth scrolling: the adventure map's scroll timer interval (games/heroes4/patches.c)
+    0x004a4201, # smooth scrolling: its scroll step
+]
 
 [[binary]]
 name = "campaign_editor.exe"

@@ -124,6 +124,21 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
   menu items are chosen by the pointer position the game polls (`GetCursorPos`).
 - A save of the first scenario after one battle is 134 KB, in `games/` below the user directory (GOG's script
   names `{app}/games` as the save folder).
+- Before its `ShowWindow` the game sets the main window's style to `WS_POPUP | WS_VISIBLE` with `SetWindowLongA`,
+  so `ShowWindow` finds it visible already; the host window has to follow the style bit (user32 HLE).
+- Map scrolling: the adventure map view's constructor sets up a timer of 50 ms (`push 50` at `0x4a3e03`) and a
+  step of 25 pixels (`[view + 0x2e4]`, stored at `0x4a41f7`): about 500 pixels a second in 20 steps. The
+  HeroesGL wrapper (Verok, MIT) patches both to 16 ms and 8 pixels in the English 3.0 build, whose code lies
+  at the same addresses as this German one (its check addresses `0x8d3881`/`0x8d3969` hold the same
+  `push 0x90000000`). Here: the opt-in setting `smooth_scroll` (patch points, `games/heroes4/patches.c`).
+- Resolutions: the game knows three, in a table at `0xa87760` of {width, height, available} (16-bit
+  words and a byte): 800×600, 1024×768, 1280×1024. The display-mode callback (`0x8d2b..`) marks those
+  DirectDraw offers at 16 bits; start-up (`0x73d943`) maps the registry's `resolution` (a width) to one of
+  them, 1024×768 for anything else. About 15 places choose a layout by the width (800, 1024 or 1280,
+  e.g. the map view at `0x4a35a7`). Verok's "Resolution Mod" (2020, closed, a plug-in of his wrapper)
+  offers three sizes per aspect ratio (16:10: 960×600, 1280×800, 1680×1050; 16:9: 1024×600, 1366×768,
+  1920×1080; and 2560×1080) behind the game's three choices; the town and combat screens stay their size,
+  centred **(open: how each layout switch takes a wide size)**.
 
 ## Open questions
 
