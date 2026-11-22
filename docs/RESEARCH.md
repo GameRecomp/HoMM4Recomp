@@ -81,6 +81,20 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
 - Multiplayer: `main_menu_tcpip`, `join_game_tcpip`, `main_menu_gamespy`, `join_game_gamespy`,
   `master.gamespy.com`, `Software\GameSpy\GameSpy Arcade`.
 
+### GOG build 76223 (six languages)
+
+- GOG's newer installers ("win11 gog 0.2", build 76223) ship a `Heroes4.exe` of 6,885,376 bytes in German,
+  English, French, Italian and Spanish: 25023's code with one change. The display mode's function (`0x8d3750`)
+  starts with a jump to a cave in padding (`0x411114`) that calls `0x8d22d0(0, width, height)` and jumps back.
+  The patch points stay where they were. The five files differ from each other only in padding (`recomp
+  codediff`: all 62,643 functions the same); the game's texts are in its data files.
+- The Polish `Heroes4.exe` (6,942,720 bytes) and `campaign_editor.exe` are compiled on their own: 58,543 of
+  62,643 functions (73.5 % of the code) byte for byte the same as German 76223's, the rest with other register
+  choices and stack frames, at shifted addresses. The patches' places were found by the instructions around them
+  with absolute addresses and call targets masked, and checked instruction by instruction before and after.
+  Two places differ in kind: the resource bar's width is at `[esp+0xc0]` (not `0xb8`), and the mage guild
+  compares the width twice (`0x7629e1` for 800×600, `0x7629f9` for 1024 or 1280) where 25023 compares once.
+
 ## campaign_editor.exe
 
 - PE32 GUI, MSVC 6, image base `0x400000`, entry `0x662F66`, no relocations, timestamp `0x3E025DBA`

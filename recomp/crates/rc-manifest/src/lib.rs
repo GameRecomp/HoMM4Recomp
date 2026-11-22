@@ -653,22 +653,35 @@ mod tests {
         let ids: Vec<_> = ms.iter().map(|m| m.game.id.as_str()).collect();
         assert_eq!(ids, ["heroes4"]);
         let c = Catalog::new(&ms);
-        // One variant: the installer and its data slice; one main executable.
+        // Seven variants (GOG 25023 German; GOG 76223 in six languages), each an installer and
+        // its data slice; three main executables (25023, 76223 with four aliases, 76223 Polish).
         let variants = ms.iter().flat_map(|m| &m.variants).count();
-        assert_eq!(variants, 1);
+        assert_eq!(variants, 7);
         let media = ms
             .iter()
             .flat_map(|m| &m.variants)
             .flat_map(|v| &v.media)
             .count();
-        assert_eq!(media, 2);
-        let mains: BTreeSet<_> = ms
+        assert_eq!(media, 14);
+        let mains: Vec<_> = ms
             .iter()
             .flat_map(|m| &m.binaries)
             .filter(|b| matches!(b.role, Role::Main | Role::Alternate))
-            .map(|b| b.sha256.as_str())
             .collect();
-        assert_eq!(mains.len(), 1);
+        assert_eq!(mains.len(), 3);
+        assert_eq!(mains.iter().map(|b| b.aliases.len()).sum::<usize>(), 4);
+        // An alias is known by its hash, as the binary whose code it runs.
+        let english = "b7c2f6caeeba640b1c5f1d812b172938bb4dd4ec62e34ec93ad827bd1ffaec87";
+        assert!(matches!(
+            c.lookup(english),
+            [Hit::Binary {
+                role: Role::Main,
+                ..
+            }]
+        ));
+        assert!(mains
+            .iter()
+            .any(|b| b.matches(english) && b.sha256_in("gog-en-76223") == Some(english)));
         assert!(!c.is_empty());
     }
 

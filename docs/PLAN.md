@@ -307,6 +307,12 @@ Binary treatment (first proposal, see M2 and M6):
 - [ ] Android: APK from the template, data in app storage (1 GB), touch input (tap = left click, long press =
       right click info popups, two-finger drag = scroll), hardware back = Escape
 - [ ] Release workflow: converter binaries for Windows and Linux, shell templates, the page on GitHub Pages
+- [x] GOG's newer installers (build 76223) in six languages (`gog-{de,en,fr,it,es,pl}-76223`): unpacked,
+      lifted and played to the adventure map with widescreen on (1366×768). German, English, French, Italian and
+      Spanish run one lifted `Heroes4.exe` (the others are manifest *aliases* of the German one: same code);
+      Polish is a build of its own with its own lift and the patches' addresses in `games/heroes4/builds.c`
+- [ ] The languages' scripted scenarios: `games/heroes4/scenarios` are recorded with gog-de; their
+      screenshots differ in other languages (texts), their inputs (scenario lists sorted by name) too
 
 ### M13 – Polish
 
@@ -376,4 +382,5 @@ Tracked with answers in [RESEARCH.md](RESEARCH.md):
 | 2026-11-21 | First target: the German GOG "Complete" installer (`3.0`, build 25023, Inno 5.6.2 with one external slice). Other languages and stores are added by hash only. |
 | 2026-11-21 | Game id `heroes4`, executable `homm4-heroes4`; the campaign editor becomes a second program of the same game (M11). |
 | 2026-11-22 | Widescreen after the way of Verok's Resolution Mod, but with the wide layouts made at run time from the game's own (moved, widened, continued) instead of drawn art for fixed sizes: any shape, nothing to ship. |
+| 2026-11-22 | Builds of a binary with the same code (they differ only in bytes no code reaches, `recomp codediff`) are listed as `aliases` of one `[[binary]]`: lifted once, matched by any of their hashes (lifter, converter, runtime). A build with other code gets its own `[[binary]]` and lift; the game's patches keep one address table per build (`games/heroes4/builds.c`), the runtime names the build (`rc_game_variant`). |
 | 2026-11-21 | `binkw32.dll` is lifted, `Mss32.dll` is HLE (same build as Cultures'), `Mp3dec.asi` is proposed for lifting (final decision in M6). |

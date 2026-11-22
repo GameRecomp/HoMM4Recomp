@@ -19,9 +19,12 @@ toolchain of [TropicoRecomp](https://github.com/GameRecomp/TropicoRecomp) and
 
 ## What you need
 
-The German GOG installer of *Heroes of Might and Magic IV – Complete*: both files,
-`setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023).exe` and its `-1.bin`. Other languages are added
-once their installers are known (by their checksums).
+A GOG installer of *Heroes of Might and Magic IV – Complete*: both files, the `setup_….exe` and its `-1.bin`.
+Known (by their checksums, see [docs/TARGETS.md](docs/TARGETS.md)): the German one of build 25023,
+`setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023).exe`, and the newer ones of build 76223 in
+English, German, French, Italian, Spanish and Polish,
+`setup_heroes_of_might_and_magic_4_complete_3.0_win11_gog_0.2_(76223).exe` (English) or
+`…_win11_gog_0.2_(<language>)_(76223).exe`.
 
 ## How to play
 

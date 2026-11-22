@@ -21,6 +21,8 @@
  *     its layer's left edge); the town, which scales its picture by the screen's width, sees the
  *     class's.
  *
+ * Addresses here are those of the 25023 build; builds.c has each build's.
+ *
  * A layer in memory (0x68 bytes): its name (a string, text at +0x08, length at +0x0c), its type
  * (+0x14; 4 and more: with alpha), its rectangle (+0x18: left, top, right, bottom), and shared
  * buffers (+0x28 rows, +0x34 alpha, +0x40 alpha summary, +0x4c pixels; each {next, previous,
@@ -47,8 +49,8 @@
 #include "heroes4.h"
 
 #define LAYER_SIZE 0x68u
-#define OPERATOR_NEW 0x008d98a0u /* cdecl (size) */
-#define BUFFER_SET 0x00596c50u   /* thiscall (data): takes the data, frees the old if unshared */
+/* (builds.c) operator_new: cdecl (size); buffer_set: thiscall (data), takes the data, frees the old
+ * if unshared */
 
 /* ---- the sizes ---------------------------------------------------------------------------- */
 
@@ -90,12 +92,11 @@ static void set_mode(rc_cpu *c)
     static bool labelled;
     if (enabled && !labelled) {
         /* the options page's three choices (the program is loaded by now; at set-up it is not) */
-        static const uint32_t labels[3] = {0x00a75930, 0x00a75918, 0x00a758f8};
         for (int i = 0; i < 3; i++) {
             char text[16];
             snprintf(text, sizeof text, "%d x %d", wide_w[i], wide_h[i]);
             if (strlen(text) < 12) {
-                rc_put_str(labels[i], 12, text);
+                rc_put_str(h4->mode_labels[i], 12, text);
             }
         }
         labelled = true;
@@ -112,24 +113,21 @@ static void set_mode(rc_cpu *c)
     }
 }
 
-/* Where a layout switch is about to compare the width, and where the width is. */
-static const struct {
-    uint32_t at;
-    int reg;     /* register, or -1 */
-    int esp_off; /* else the stack slot [esp + esp_off] */
-} layout_switches[] = {
-    {0x004a35a7, RC_EAX, 0},  /* adventure map view */
-    {0x004a397e, RC_EAX, 0},  /* adventure map view */
-    {0x004accf4, -1, 0xb8},   /* adventure map: resource bar (the argument, read again later) */
-    {0x004b56f1, RC_EAX, 0},  /* adventure map (with 0x4b57cb in Verok's list) */
-    {0x00584266, RC_EAX, 0},  /* class index 0, 1, 2 of a size (with its height) */
-    {0x0062b8da, RC_EAX, 0},  /* combat: background and border */
-    {0x0069fbca, RC_EAX, 0},  /* an animation */
-    {0x0076da14, RC_EAX, 0},  /* main menu: its art */
-    {0x0076e534, RC_EAX, 0},  /* main menu: its buttons */
-    {0x00773e80, RC_EAX, 0},  /* credits */
-    {0x008ac64a, RC_EAX, 0},  /* town */
-    {0x008c8f8f, RC_EAX, 0},  /* a clock */
+/* Where a layout switch is about to compare the width (h4->layout_switch[i]; addresses of 25023),
+ * and where the width is: a register, or (-1) the stack slot h4->resource_bar_esp. */
+static const int layout_switches[] = {
+    RC_EAX, /* 0x4a35a7 adventure map view */
+    RC_EAX, /* 0x4a397e adventure map view */
+    -1,     /* 0x4accf4 adventure map: resource bar (the argument, read again later) */
+    RC_EAX, /* 0x4b56f1 adventure map (with 0x4b57cb in Verok's list) */
+    RC_EAX, /* 0x584266 class index 0, 1, 2 of a size (with its height) */
+    RC_EAX, /* 0x62b8da combat: background and border */
+    RC_EAX, /* 0x69fbca an animation */
+    RC_EAX, /* 0x76da14 main menu: its art */
+    RC_EAX, /* 0x76e534 main menu: its buttons */
+    RC_EAX, /* 0x773e80 credits */
+    RC_EAX, /* 0x8ac64a town */
+    RC_EAX, /* 0x8c8f8f a clock */
 };
 
 static void layout_switch(rc_cpu *c)
@@ -140,14 +138,15 @@ static void layout_switch(rc_cpu *c)
         return;
     }
     for (size_t i = 0; i < sizeof layout_switches / sizeof layout_switches[0]; i++) {
-        if (layout_switches[i].at == c->eip) {
-            uint32_t a = c->r[RC_ESP] + (uint32_t)layout_switches[i].esp_off;
-            uint32_t v = layout_switches[i].reg >= 0 ? c->r[layout_switches[i].reg] : rc_ld32(a);
+        if (h4->layout_switch[i] == c->eip) {
+            int reg = layout_switches[i];
+            uint32_t a = c->r[RC_ESP] + (uint32_t)h4->resource_bar_esp;
+            uint32_t v = reg >= 0 ? c->r[reg] : rc_ld32(a);
             if ((int32_t)v != w) {
                 return; /* a window's width, not the screen's */
             }
-            if (layout_switches[i].reg >= 0) {
-                c->r[layout_switches[i].reg] = (uint32_t)class_w[k];
+            if (reg >= 0) {
+                c->r[reg] = (uint32_t)class_w[k];
             } else {
                 rc_st32(a, (uint32_t)class_w[k]);
             }
@@ -174,7 +173,8 @@ static void screen_window(rc_cpu *c)
 /* The mage guild's dialog compares the screen's width (ESI) with 1024 (0x75fa98): its 800x600 form
  * below, its _1024 layout at 1024, else _1280; the comparison sees the class's width, and right
  * after it (both ways, 0x75faa4 and 0x75fe2a) ESI is the screen's again, by which the dialog
- * centres itself. */
+ * centres itself. (The Polish build compares twice, for 800x600 and then for 1024 or 1280: ESI
+ * is the screen's again after the second.) */
 static uint32_t guild_width;
 static bool guild_small; /* the 800x600 way (0x75fe2a), whose rectangle centre_800 centres */
 
@@ -190,7 +190,7 @@ static void mage_guild_compare(rc_cpu *c)
 
 static void mage_guild_compared(rc_cpu *c)
 {
-    guild_small = c->eip == 0x0075fe2a;
+    guild_small = c->eip == h4->guild_small;
     if (guild_width) {
         c->r[RC_ESI] = guild_width;
         guild_width = 0;
@@ -301,7 +301,7 @@ typedef struct {
 static uint32_t guest_new(rc_cpu *c, uint32_t size)
 {
     uint32_t esp = c->r[RC_ESP];
-    uint32_t p = rc_call_guest(c, OPERATOR_NEW, 1, &size);
+    uint32_t p = rc_call_guest(c, h4->operator_new, 1, &size);
     c->r[RC_ESP] = esp; /* cdecl: the caller removes the argument */
     return p;
 }
@@ -309,7 +309,7 @@ static uint32_t guest_new(rc_cpu *c, uint32_t size)
 static void buffer_set(rc_cpu *c, uint32_t buffer, uint32_t data)
 {
     c->r[RC_ECX] = buffer;
-    rc_call_guest(c, BUFFER_SET, 1, &data);
+    rc_call_guest(c, h4->buffer_set, 1, &data);
 }
 
 static void read_layer(uint32_t at, layer *L)
@@ -1052,25 +1052,24 @@ void heroes4_widescreen(void)
         wide_h[i] = class_h[i];
     }
     enabled = true;
-    rc_on_point(0x008d3750, set_mode);
+    rc_on_point(h4->set_mode, set_mode);
     for (size_t i = 0; i < sizeof layout_switches / sizeof layout_switches[0]; i++) {
-        rc_on_point(layout_switches[i].at, layout_switch);
+        rc_on_point(h4->layout_switch[i], layout_switch);
     }
-    rc_on_point(0x004a35ed, map_view_offset);
-    rc_on_point(0x0075fa98, mage_guild_compare);
-    rc_on_point(0x0075faa4, mage_guild_compared);
-    rc_on_point(0x0075fe2a, mage_guild_compared);
-    rc_on_point(0x00773f59, screen_window);
-    rc_on_point(0x004b57c6, screen_window);
-    static const uint32_t town_rects[] = {0x008b40c0, 0x008b43c0, 0x008b61e9, 0x008b66fa, 0x008b6a40};
-    for (size_t i = 0; i < sizeof town_rects / sizeof town_rects[0]; i++) {
-        rc_on_point(town_rects[i], town_screen);
+    rc_on_point(h4->map_view_offset, map_view_offset);
+    rc_on_point(h4->guild_compare, mage_guild_compare);
+    rc_on_point(h4->guild_compared, mage_guild_compared);
+    rc_on_point(h4->guild_small, mage_guild_compared);
+    for (size_t i = 0; i < 2; i++) {
+        rc_on_point(h4->screen_window[i], screen_window);
+        rc_on_point(h4->battlefield[i], battlefield);
     }
-    rc_on_point(0x008b6835, town_picture);
-    rc_on_point(0x0075fe42, centre_800);
-    rc_on_point(0x00599f62, main_menu_picture);
-    rc_on_point(0x0062c608, battlefield);
-    rc_on_point(0x0062ae28, battlefield);
-    rc_on_point(0x0058e467, layout_read);
+    for (size_t i = 0; i < 5; i++) {
+        rc_on_point(h4->town_screen[i], town_screen);
+    }
+    rc_on_point(h4->town_picture, town_picture);
+    rc_on_point(h4->centre_800, centre_800);
+    rc_on_point(h4->main_menu_picture, main_menu_picture);
+    rc_on_point(h4->layout_read, layout_read);
     rc_log("widescreen: %dx%d, %dx%d, %dx%d", wide_w[0], wide_h[0], wide_w[1], wide_h[1], wide_w[2], wide_h[2]);
 }
