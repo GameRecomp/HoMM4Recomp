@@ -7,6 +7,8 @@
  * setting on, the timer runs every 16 ms with steps of 8 pixels: about the same speed in some 60
  * steps a second (the values the HeroesGL wrapper uses). Both are set in the view's constructor:
  * the interval is pushed as the timer's argument, the step stored into the view.
+ *
+ * Wide resolutions: widescreen.c.
  */
 #include <stdbool.h>
 #include <string.h>
@@ -16,6 +18,8 @@
 #include "rc/log.h"
 #include "rc/mem.h"
 #include "rc/platform.h"
+
+#include "heroes4.h"
 
 void heroes4_patches(void);
 
@@ -30,6 +34,7 @@ static bool yes(const char *v) { return !strcmp(v, "yes") || !strcmp(v, "1") || 
 
 void heroes4_patches(void)
 {
+    heroes4_widescreen();
     if (yes(rc_plat_setting("smooth_scroll", "no",
                             "yes: the adventure map scrolls in small steps, about 60 a second, at the\n"
                             "same speed. no (the default): as the original, 20 steps a second."))) {

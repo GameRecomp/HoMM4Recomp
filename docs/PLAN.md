@@ -312,8 +312,14 @@ Binary treatment (first proposal, see M2 and M6):
 
 - [x] The game's own resolutions (800×600, 1024×768, 1280×1024) switch at run time through its settings
       (scenario `resolution`); settings and high scores screens open
-- [ ] Resolutions following the window and widescreen (the adventure map can show more; the UI screens are
-      fixed-size and centred), as patches in `games/heroes4/patches.c` with manifest patch points
+- [x] Widescreen (`games/heroes4/widescreen.c`): with `resolution` other than `off` the game's three
+      resolutions become three sizes of the window's shape at their heights (600, 768, 1024; on the options
+      page too); the layouts are made wide from the game's own when it reads them: the adventure map fills the
+      width, town, combat, main menu, intro and scenario pictures are centred on a background continued from
+      their own (scenarios `firstturn`, `battle`, `resolution`, `menu` unchanged with `off`)
+- [ ] Widescreen, still open: the world view dialog (rule in place, not seen yet); heights beyond the class's
+      (1920×1080 plays as 1816×1024, scaled); the main menu's sides are black (its picture is not part of its
+      layout); a window resized while playing keeps the sizes until the next start
 - [ ] Integer and smooth scaling, hardware cursor, fps limit (shared `settings.ini`: present from the shared
       platform layer, not yet checked by eye with this game)
 - [x] Smooth map scrolling, opt-in (`smooth_scroll` in `settings.ini`: 16 ms steps of 8 pixels instead of
@@ -363,4 +369,5 @@ Tracked with answers in [RESEARCH.md](RESEARCH.md):
 | 2026-11-21 | CulturesRecomp is the template for the shared code (it contains TropicoRecomp's runtime, HLE and platform layers plus the general additions). Code is copied at a pinned commit and kept general, so fixes can go back to both projects. |
 | 2026-11-21 | First target: the German GOG "Complete" installer (`3.0`, build 25023, Inno 5.6.2 with one external slice). Other languages and stores are added by hash only. |
 | 2026-11-21 | Game id `heroes4`, executable `homm4-heroes4`; the campaign editor becomes a second program of the same game (M11). |
+| 2026-11-22 | Widescreen after the way of Verok's Resolution Mod, but with the wide layouts made at run time from the game's own (moved, widened, continued) instead of drawn art for fixed sizes: any shape, nothing to ship. |
 | 2026-11-21 | `binkw32.dll` is lifted, `Mss32.dll` is HLE (same build as Cultures'), `Mp3dec.asi` is proposed for lifting (final decision in M6). |

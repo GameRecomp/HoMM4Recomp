@@ -138,7 +138,84 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
   e.g. the map view at `0x4a35a7`). Verok's "Resolution Mod" (2020, closed, a plug-in of his wrapper)
   offers three sizes per aspect ratio (16:10: 960×600, 1280×800, 1680×1050; 16:9: 1024×600, 1366×768,
   1920×1080; and 2560×1080) behind the game's three choices; the town and combat screens stay their size,
-  centred **(open: how each layout switch takes a wide size)**.
+  centred. His wrapper's source (github.com/Nemirtingas/HeroesGL, `src/Heroes4GL`) has the mode list and
+  letterboxing (`ImageAspect`) and loads plug-ins (`mods\*.mod`) that may add data packages to the game; the
+  Resolution Mod is such a plug-in, its patches and art unpublished.
+- Layouts by resolution: the data holds one per size and screen, named with it: `adventure.800/.1024/.1280`,
+  `combat.…`, `town.…`, `menu.main.…`, `dialog.win_lose.prologue_…`, `…logo_…`, `dialog.mage_guild.*_1024/_1280`.
+  The switches that pick them (width from a window's rectangle, `[+0x98] - [+0x90]`, or an argument):
+  adventure map view `0x4a35a7` and `0x4a397e`, its resource bar `0x4accf4` (stack argument read again at
+  `0x4ad917`, `0x4adf59`), `0x4b56f1`, a size-class helper `0x584260` (0 for 800×600, 1 for 1024×768, 2
+  otherwise; three callers), a dialog's background and border `0x62b8da`, an animation `0x69fbca`, the main
+  menu `0x76da14` (its art; any other width loads none and crashes) and `0x76e534` (buttons), the credits
+  `0x773e80`, the town `0x8ac64a`, a clock `0x8c8f8f`, the options page `0x7ca845`, `0x7cab59`, `0x7cba73`,
+  `0x7cbe5b`. Height checks: `0x4837b4`, `0x7d8591`.
+- How Verok's Resolution Mod (v1.51, 2022; a 52 MB package: his wrapper `DDRAW.dll`, the plug-in
+  `mods/res_mod.mod`, a version check `mods/versions.mod`, and the data package `data/res_mod.h4r`) does it:
+  - It replaces the game's three resolutions instead of adding any: per aspect ratio ("Mode" in
+    `config.ini`, chosen from the screen's shape when unset) three sizes take the three slots: 4:3 the
+    originals, 16:10 960×600, 1280×800, 1680×1050, 16:9 1024×600, 1366×768, 1920×1080; 21:9 and 32:9 only
+    the third slot (2560×1080, 3840×1080), the other two staying 4:3.
+  - Its patch table for this build (selected like the wrapper's, by the two `push 0x90000000` and the "800"
+    at `0xa7592c`) holds about 70 places: the constants 800/1024/1280 (and 600/768/1024) of every layout
+    switch, the mode table `0xa87760`, the display-mode callback, start-up, the options page and its
+    labels ("%d x %d" written into the game's three strings), each rewritten to the slot's new size;
+    a few functions replaced (the size-class helper `0x584260`; a centring of fixed 800×600 pictures in
+    the screen; town and combat drawing); and the layout names of the adventure screen, town, combat,
+    main menu, world view and the win/lose dialogs pointed at names formatted with the size
+    (`adventure.%04dx%04d`, `town.alpha.…` when "Transparent" is set, …).
+  - The art: `res_mod.h4r` (H4R version 5: header, then gzip streams, a directory at the end of
+    {offset, packed size, size, time, name length, name, two words}) holds 85 layer files, new layouts
+    for each size: `layers.adventure.1366x0768.h4d` and so on for adventure, combat (and combat.alpha),
+    town (and town.alpha), menu.main, dialog.view_world, the win/lose prologue, epilogue and logo. The
+    game builds its screens from those layouts, so with them the adventure map fills the width and the
+    town and combat have wide pictures. The plug-in has the game load the package beside its own
+    (`0x7ff910`, the loader start-up calls for `data/new.h4r` at `0x73cfed`).
+- Packages: an entry of the directory is {offset, packed size, size, time}, the name, the artist's source
+  path and a second name (each a 16-bit length and the bytes), and a word (3). Entries are gzip streams,
+  or empty with the second name naming the real one. `updates.h4r` repeats `layers.adventure.*` (it wins
+  over `heroes4.h4r`).
+- Layout files (`layers.*.h4d`): a 16-bit count of layers (41 in `adventure.1024`), then per layer a short
+  header (a 16-bit count and that many small fields; the first always 1, then 8: 8-bit pixels), the name
+  (16-bit length), a byte 1, the rectangle (four 32-bit numbers: left, top, right, bottom) and the pixels
+  in rows (below). Verok's `adventure.1366x0768` keeps every layer of
+  `adventure.1024`: all of the right panel (mini map, buttons, resource numbers, hero and town lists, day
+  scroll, end turn: 23 layers) moved right by the extra width, 342; the frame's top edge `Top` widened
+  from 21–631 to 21–973; the left edge `LEft` unchanged; so did `Top_Border`, `Bottom_Border` and `Bottom`.
+- Layout files in detail (from the reader, `0x595880`, called for each layer by `0x58e2e0`): per layer a
+  16-bit colour count, a 16-bit word (1), the palette (3 bytes a colour), the name, a type byte (0 opaque, 1
+  palette index 0 transparent, 4 and more with alpha), the rectangle, one row entry per line {16-bit first
+  column, 16-bit end column, 32-bit offset of its first pixel}, the pixels (palette indices), and for type 4
+  and more 4-bit alpha (low nibble first) and a summary of 2 bits for each 32 pixels (0 transparent, 1 opaque,
+  2 both, 3 partly transparent; the original encoder chose 3 a little more often). In memory a layer is 0x68
+  bytes (name +0x04, type +0x14, rectangle +0x18, shared buffers {next, previous, data} for rows +0x28, alpha
+  +0x34, summary +0x40, pixels +0x4c, palette +0x58); after reading, `0x58e2e0` sorts the layers and copies
+  them into a map by name (from `0x58e467` on). Buffers are allocated with `0x8d98a0` and given with
+  `0x596c50`.
+- Layouts as Verok widened them (his 1366×768 versions against the originals): the adventure screen's right
+  part (from the map's right frame on) moves by the extra width and the strips along the map (`Top`,
+  `Top_Border`, `Bottom_Border`, `Bottom`) grow; town, combat and main menu move to the middle and get a
+  background as large as the screen (type 1, transparent where the battlefield or the town is drawn); the
+  intro, prologue and epilogue pictures (`dialog.win_lose.logo_*`, `prologue_*`, `epilogue_*`: a frame of four
+  pieces around a film) keep the film in the middle and the pieces at the edges reach on; the world view
+  (an 800×600 dialog) grows in its map. His code (beside the constants) places what the game draws itself:
+  the main menu's picture (`0x599f5a`), the battlefield (`0x62c608`, `0x62ae28`, the offset passed to
+  `0x5a6500`), the town's picture window (its x at `0x8b6833`: the `town_image` layer's left), the town's
+  800×600 dialogs (`0x75fe3a`), the map view's offset for 800×600 things (`0x4a35a7`: `[view + 0xcc]`,
+  `[view + 0xd0]`), the screen rectangle the town scales its picture by (`0x8d2e20` at five places: the
+  class's), and the screen's window after a resolution change (`0x71eee0` from `0x773da0`, main menu, and
+  `0x4b5630`, map).
+- The main window's class has `CS_DBLCLKS` (style `0xb`); the hero screen (a portrait in the panel) and
+  more open on `WM_LBUTTONDBLCLK`. The user32 HLE made double clicks only for programs with child windows,
+  not on its direct path for a game's main window: no double click reached the game.
+- The 1280 adventure layout's `Top` runs on over the right frame (0–934, the frame from 880): the strips along
+  the map widen where they meet the frame, not at their end.
+- Here (`games/heroes4/widescreen.c`) the game keeps its classes until it sets the mode (`0x8d3750`); the
+  layout switches see the class's width again; the layouts are made wide at `0x58e467`, by rules over the
+  layer names and places, the new columns continuing the strip's pattern or reflecting the picture next to
+  them; a background's sides are the calmest patch of its own picture (least change of brightness, lines
+  counting far more than grain), reflected to and fro, with a dark line along the middle, as Verok's plain
+  side panels; the places above are patch points.
 
 ## Open questions
 
