@@ -12,7 +12,8 @@ Every executable we support is pinned by SHA-256 in [`TARGETS.md`](TARGETS.md) a
 
 ## Quick start
 
-Requirements: CMake ≥ 3.25, a C11 compiler, Rust (stable), and SDL3 (with SDL3_ttf and SDL3_mixer) for a window
+Requirements: CMake ≥ 3.25, Ninja (the `dev` and `release` presets use it, so the build compiles on every core
+without `-j`), a C11 compiler, Rust (stable), and SDL3 (with SDL3_ttf and SDL3_mixer) for a window
 and sound. Building the game compiles about 360 MB of generated C: plan for several minutes on 8 cores and about
 2 GB of memory per compiler process.
 

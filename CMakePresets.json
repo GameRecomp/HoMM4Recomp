@@ -12,12 +12,14 @@
       "name": "dev",
       "displayName": "Debug, tests, SDL3 if found",
       "inherits": "base",
+      "generator": "Ninja",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "RC_WITH_SDL3": "AUTO" }
     },
     {
       "name": "release",
       "displayName": "RelWithDebInfo, SDL3 required",
       "inherits": "base",
+      "generator": "Ninja",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo", "RC_WITH_SDL3": "ON" }
     },
     {
