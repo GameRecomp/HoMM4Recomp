@@ -260,8 +260,10 @@ Binary treatment (first proposal, see M2 and M6):
 - [x] TCP/IP host and join between two recompiled programs on one machine: the joining program finds the
       host's game at 127.0.0.1 (server, map, ping), joins with a player name and reaches the game set-up, where
       the host lists it (two scripted runs lined up with `shot`/`wait`)
-- [ ] Both players take slots and the game starts; a full game played; on a LAN; the host's IP address shown
-      (now 0.0.0.0 or nonsense: `gethostbyname` of our host name)
+- [x] The host shows its network address; the joining program receives the host's whole game set-up (the
+      shared network held only 256 bytes of DirectPlay application data, Heroes IV uses 304)
+- [ ] The joining player takes a slot (clicking one does not change it yet: **open**), the game starts; a full
+      game played; on a LAN
 - [ ] GameSpy: the menu entries fail cleanly; no connection attempts to dead servers (patch if needed)
 - [ ] Browser: no raw sockets — WebSocket relay or "not available" (decision when there)
 
@@ -275,7 +277,9 @@ Binary treatment (first proposal, see M2 and M6):
       regions, the OLE calls MFC makes at start-up (no other programs to share objects with)
 - [ ] Still missing (on demand): property sheets, image lists and drag images, OLE structured storage
       (`StgCreateDocfileOnILockBytes`), `oledlg`, `OLEPRO32`, `OLEAUT32`
-- [ ] Open a campaign, change it, save it; the game plays it
+- [x] Save: a new map saved through our Save As dialog lands in the user folder's `maps/`; the game reads it
+      with its own maps (it lists only maps with players, which a fresh map does not have)
+- [ ] Open a campaign, change it (towns, heroes, players), save it; the game plays it
 
 ### M12 – Converter and platforms
 
