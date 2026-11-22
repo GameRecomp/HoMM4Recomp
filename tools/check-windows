@@ -15,8 +15,9 @@ command -v docker > /dev/null || { echo "check-windows: needs docker" >&2; exit 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 git archive HEAD | tar -x -C "$work"
-docker run --rm -v "$work:/src" -w /src debian:trixie bash -c '
+docker run --rm -v "$work:/src" -w /src -e OWNER="$(id -u):$(id -g)" debian:trixie bash -c '
   set -e
+  trap "chown -R \$OWNER /src" EXIT
   apt-get update -qq > /dev/null
   apt-get install -y -qq gcc-mingw-w64-ucrt64 binutils-mingw-w64-ucrt64 cmake make wine > /dev/null 2>&1
   cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-ucrt64.cmake -DCMAKE_BUILD_TYPE=Release \
