@@ -246,7 +246,7 @@ Binary treatment (first proposal, see M2 and M6):
 
 - [ ] Campaign start and first map of: the base game, *The Gathering Storm*, *Winds of War*
 - [ ] Linux (AppImage) and Windows (zip) shells from CI; the CLI converter for both
-- [ ] `docs/RELEASE-NOTES.md` with known issues; README for players
+- [x] `docs/RELEASE-NOTES.md` with known issues (draft); README for players
 - [ ] English GOG installer pinned if available (another `[[variant]]`, same plan otherwise)
 
 ### M10 – Multiplayer
@@ -281,11 +281,14 @@ Binary treatment (first proposal, see M2 and M6):
       made with `recomp template` + `recomp package` from a shell without lifted code plays the `firstturn`
       scenario with exactly the C build's API calls and screenshot. Exceptions are unwound in the native and
       WebAssembly back ends as in C
-- [ ] `recomp convert --system <linux|windows|android|web> setup_….exe` (finds the `-1.bin` beside it)
-- [ ] Browser page: picks both files (or a folder), reads the 1 GB slice in streamed blocks, stores the
-      unpacked game in the origin's storage (OPFS) once; the player loads it from there
-- [ ] Code size in the browser: measure the wasm module for `Heroes4.exe`; if too large for comfortable
-      compilation, split into lazily compiled modules or reduce per-function overhead in `rc-emit-wasm`
+- [x] `recomp convert --template T.zip setup_….exe` (finds the `-1.bin` beside it): a Linux package of the game
+      and its editor in 2 minutes
+- [ ] Windows, macOS and Android shells and templates built in CI (no Android SDK here; CI has never run)
+- [x] Browser page: picks both files, reads the 1 GB slice in streamed blocks, stores the unpacked game in the
+      origin's storage (OPFS); shown in headless Chromium: conversion in 2½ minutes, then the player runs the
+      intro, the main menu, the New Game menu (C++ exceptions) and the scenario list
+- [x] Code size in the browser: the module is 109 MB; browsers compile it lazily and it loads without
+      trouble (2.2 GB peak while converting); splitting is not needed for now
 - [ ] Android: APK from the template, data in app storage (1 GB), touch input (tap = left click, long press =
       right click info popups, two-finger drag = scroll), hardware back = Escape
 - [ ] Release workflow: converter binaries for Windows and Linux, shell templates, the page on GitHub Pages
