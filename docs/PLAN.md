@@ -226,7 +226,8 @@ Binary treatment (first proposal, see M2 and M6):
 
 - [x] New game on a scenario map (single player against the AI): a hero moves (path shown), a town opens
 - [x] Combat screen: a battle fought to the end with automatic combat, the result screen
-- [ ] Manual combat, spells
+- [x] Manual combat: the active unit attacks a chosen enemy, the next unit (the hero) gets its turn
+- [ ] Spells
 - [x] AI turn completes (the computer players' first turn; duration still to measure)
 - [x] Save and load (`.h4s` in the user directory's `games/`): saved over the autosave from the system menu,
       loaded again from the main menu; quick save and the high-score table still to check
