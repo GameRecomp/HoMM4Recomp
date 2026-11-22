@@ -794,6 +794,13 @@ static uint32_t deliver_one(rc_cpu *c, dmsg *m)
     args[1] = m->type;
     args[2] = msg;
     hr = rc_call_guest(c, d.handler, 3, args);
+    if (rc_trace("dplay")) {
+        char hex[3 * 32 + 1] = "";
+        for (uint32_t i = 0; i < m->size && i < 32 && m->type != MSG_ENUM_HOSTS_RESPONSE; i++) {
+            snprintf(hex + 3 * i, 4, " %02x", m->data[i]);
+        }
+        rc_log("[dpnet] message 0x%08x (%#x, %u bytes%s) -> 0x%08x", m->type, m->a, m->size, hex, hr);
+    }
     /* What the handler gave back. */
     if (m->type == MSG_CREATE_PLAYER && p) {
         p->context = rc_ld32(msg + 8);
@@ -801,6 +808,9 @@ static uint32_t deliver_one(rc_cpu *c, dmsg *m)
         p->context = rc_ld32(msg + 24);
         if (hr != DPN_OK) {
             rc_log("[dpnet] the game turned down player %#x (0x%08x); it stays in the session", m->a, hr);
+        }
+        if (rc_trace("dplay")) {
+            rc_log("[dpnet] connect reply: %#x, %u bytes", rc_ld32(msg + 12), rc_ld32(msg + 16));
         }
     } else if (m->type == MSG_RECEIVE && hr != DPNSUCCESS_PENDING) {
         rc_heap_free(buf); /* else the game returns it with ReturnBuffer */
@@ -1137,6 +1147,13 @@ static void p_SendTo(rc_cpu *c)
     }
     if (++d.n_sent % 200 == 0 && rc_trace("dplay")) {
         rc_log("[dpnet] %u messages sent, %u received", d.n_sent, d.n_received);
+    }
+    if (rc_trace("dplay")) {
+        char hex[3 * 32 + 1] = "";
+        for (uint32_t i = 0; i < total && i < 32; i++) {
+            snprintf(hex + 3 * i, 4, " %02x", all[i]);
+        }
+        rc_log("[dpnet] send to %#x, %u bytes, flags 0x%x:%s", to, total, flags, hex);
     }
     net_send(d.local, to, all, total);
     if (to == DPNID_ALL && !(flags & DPNSEND_NOLOOPBACK)) {
