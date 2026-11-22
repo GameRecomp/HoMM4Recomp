@@ -244,7 +244,8 @@ Binary treatment (first proposal, see M2 and M6):
 
 ### M9 – Release v0.1
 
-- [ ] Campaign start and first map of: the base game, *The Gathering Storm*, *Winds of War*
+- [x] Campaign start and first map of: the base game, *The Gathering Storm*, *Winds of War* (scenarios
+      `campaign-h4`, `campaign-gs`, `campaign-wow`); playing them through is still to do
 - [ ] Linux (AppImage) and Windows (zip) shells from CI; the CLI converter for both
 - [x] `docs/RELEASE-NOTES.md` with known issues (draft); README for players
 - [ ] English GOG installer pinned if available (another `[[variant]]`, same plan otherwise)
