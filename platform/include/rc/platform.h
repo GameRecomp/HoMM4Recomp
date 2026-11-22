@@ -115,6 +115,11 @@ void rc_plat_display_load(const char *user_dir);
  * the resolution a game project lets the user choose) back to the
  * settings.ini rc_plat_display_load read. */
 void rc_plat_display_store(void);
+
+/* A game project's own setting `key` (lower case): from the environment as RC_<KEY>, else from
+ * settings.ini, else `fallback`. A key settings.ini does not have yet is added to it with
+ * `fallback` and `about` (one comment line for each line of it), so that the player finds it. */
+const char *rc_plat_setting(const char *key, const char *fallback, const char *about);
 void rc_plat_show(bool show);
 void rc_plat_title(const char *title);
 

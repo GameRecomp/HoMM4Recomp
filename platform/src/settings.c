@@ -65,6 +65,29 @@ static int scale_tenths(const char *text)
     return v >= 1.0 && v <= 8.0 ? (int)(v * 10.0 + 0.5) : 10;
 }
 
+/* A game project's own settings (rc_plat_setting): the keys of settings.ini the display settings
+ * do not use, as read (lower case). */
+static struct {
+    char key[32], value[64];
+} own[16];
+static int n_own;
+
+static void set_own(const char *key, const char *value)
+{
+    int i = 0;
+    while (i < n_own && strcmp(own[i].key, key)) {
+        i++;
+    }
+    if (i == n_own) {
+        if (n_own == (int)(sizeof own / sizeof own[0])) {
+            return;
+        }
+        n_own++;
+    }
+    snprintf(own[i].key, sizeof own[i].key, "%s", key);
+    snprintf(own[i].value, sizeof own[i].value, "%s", value);
+}
+
 static void set(rc_display *d, const char *key, const char *value)
 {
     if (!strcmp(key, "scale")) {
@@ -106,6 +129,8 @@ static void set(rc_display *d, const char *key, const char *value)
         } else {
             d->game_w = d->game_h = 0;
         }
+    } else {
+        set_own(key, value);
     }
 }
 
@@ -302,4 +327,51 @@ bool rc_plat_game_size(int *width, int *height)
     *width = w;
     *height = h;
     return true;
+}
+
+const char *rc_plat_setting(const char *key, const char *fallback, const char *about)
+{
+    const char *value = NULL;
+    for (int i = 0; i < n_own && !value; i++) {
+        if (!strcmp(own[i].key, key)) {
+            value = own[i].value;
+        }
+    }
+    if (!value) {
+#if !defined(__EMSCRIPTEN__)
+        /* Not in settings.ini yet: added, with its explanation, so that the player finds it. */
+        FILE *f = settings_path[0] ? fopen(settings_path, "a") : NULL;
+        if (f) {
+            fputs("\n", f);
+            for (const char *line = about; line && *line;) {
+                const char *nl = strchr(line, '\n');
+                int len = nl ? (int)(nl - line) : (int)strlen(line);
+                fprintf(f, "# %.*s\n", len, line);
+                line += len + (nl ? 1 : 0);
+            }
+            fprintf(f, "%s = %s\n", key, fallback);
+            fclose(f);
+        }
+#else
+        (void)about;
+#endif
+        set_own(key, fallback);
+        value = fallback;
+    }
+    /* The environment over the file (as RC_RESOLUTION and the others). */
+    char name[48] = "RC_";
+    for (size_t i = 0; key[i] && i + 4 < sizeof name; i++) {
+        name[i + 3] = (char)toupper((unsigned char)key[i]);
+        name[i + 4] = 0;
+    }
+    static char env[64];
+    const char *v = getenv(name);
+    if (v && *v) {
+        snprintf(env, sizeof env, "%s", v);
+        for (char *p = env; *p; p++) {
+            *p = (char)tolower((unsigned char)*p);
+        }
+        value = env;
+    }
+    return value;
 }

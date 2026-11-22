@@ -44,6 +44,12 @@ bool rc_plat_game_size(int *width, int *height)
     return false; /* no window, no settings: the game's own */
 }
 void rc_plat_display_store(void) {}
+const char *rc_plat_setting(const char *key, const char *fallback, const char *about)
+{
+    (void)key;
+    (void)about;
+    return fallback; /* no settings.ini */
+}
 
 void rc_plat_show(bool show) { (void)show; }
 void rc_plat_title(const char *title) { (void)title; }
