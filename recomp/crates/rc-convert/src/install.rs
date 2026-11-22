@@ -54,7 +54,18 @@ impl Install {
     /// Read the installer (or zip) and identify its game: the manifests' binaries are unpacked into
     /// memory and hashed.
     pub fn open(reader: Box<dyn ReadSeek>, ms: &[Manifest]) -> Result<Install, Error> {
-        let (_, mut installer) = rc_media::open_reader(reader).map_err(|e| e.to_string())?;
+        Self::open_with(reader, Vec::new(), ms)
+    }
+
+    /// [`Install::open`] for an installer whose data is in external slices (`setup_….exe` and
+    /// its `-1.bin`, …), given in slice order.
+    pub fn open_with(
+        reader: Box<dyn ReadSeek>,
+        slices: Vec<Box<dyn ReadSeek>>,
+        ms: &[Manifest],
+    ) -> Result<Install, Error> {
+        let (_, mut installer) =
+            rc_media::open_readers(reader, slices).map_err(|e| e.to_string())?;
         let names: std::collections::BTreeSet<String> = ms
             .iter()
             .flat_map(|m| m.binaries.iter().map(|b| b.name.to_ascii_lowercase()))

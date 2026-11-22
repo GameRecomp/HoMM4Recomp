@@ -120,7 +120,17 @@ pub fn convert_package(
     let ms = rc_convert::lift::manifests()?;
     let file = fs::File::open(media).map_err(|e| format!("{}: {e}", media.display()))?;
     let reader = std::io::BufReader::with_capacity(1 << 20, file);
-    let mut inst = rc_convert::install::Install::open(Box::new(reader), &ms)
+    // An installer's external data slices beside it (setup_x.exe: setup_x-1.bin, -2.bin, …).
+    let mut slices: Vec<Box<dyn rc_convert::rc_media::ReadSeek>> = Vec::new();
+    for n in 1.. {
+        let p = media.with_file_name(format!(
+            "{}-{n}.bin",
+            media.file_stem().unwrap_or_default().to_string_lossy()
+        ));
+        let Ok(f) = fs::File::open(&p) else { break };
+        slices.push(Box::new(std::io::BufReader::with_capacity(1 << 20, f)));
+    }
+    let mut inst = rc_convert::install::Install::open_with(Box::new(reader), slices, &ms)
         .map_err(|e| format!("{}: {e}", media.display()))?;
     let (_, files) = inst.plan();
     let game_bytes: u64 = files.iter().map(|f| f.1).sum();

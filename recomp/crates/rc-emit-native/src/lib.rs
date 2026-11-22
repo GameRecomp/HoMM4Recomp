@@ -476,7 +476,13 @@ impl<'a, 'b> Emitter<'a, 'b> {
         self.b.ins().brif(u, unwinding, &[], go_on, &[]);
         self.b.switch_to_block(unwinding);
         let ebp = self.b.use_var(self.regs[5]);
-        let lo = self.f.insns.iter().map(|i| i.addr).min().unwrap_or(self.f.addr);
+        let lo = self
+            .f
+            .insns
+            .iter()
+            .map(|i| i.addr)
+            .min()
+            .unwrap_or(self.f.addr);
         let hi = self
             .f
             .insns
@@ -507,7 +513,10 @@ impl<'a, 'b> Emitter<'a, 'b> {
     /// the unwinding to its frame; entered by that frame (resume_eip), it runs.
     fn except_prologue(&mut self) {
         let t = MemFlagsData::trusted();
-        let addr = self.b.ins().iconst(types::I32, i64::from(self.f.addr as i32));
+        let addr = self
+            .b
+            .ins()
+            .iconst(types::I32, i64::from(self.f.addr as i32));
         let resume = self.b.ins().load(types::I32, t, self.c, layout::RESUME_EIP);
         let is_resume = self.b.ins().icmp(IntCC::Equal, resume, addr);
         let resumed = self.b.create_block();
