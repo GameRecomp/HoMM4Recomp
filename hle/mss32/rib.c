@@ -14,7 +14,6 @@
  */
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "mss32.h"
 #include "rc/log.h"
@@ -23,6 +22,24 @@
 #define MSS "mss32.dll"
 #define RIB_FUNCTION 0u
 #define RIB_ATTRIBUTE 1u
+
+/* Names compare without case, in ASCII (strcasecmp is POSIX, not on Windows). */
+static int lower(int ch) { return ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch; }
+
+static bool same_n(const char *a, const char *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        if (lower((unsigned char)a[i]) != lower((unsigned char)b[i])) {
+            return false;
+        }
+        if (!a[i]) {
+            return true;
+        }
+    }
+    return true;
+}
+
+static bool same(const char *a, const char *b) { return same_n(a, b, (size_t)-1); }
 
 #define ENTRIES 256
 static struct rib_entry {
@@ -90,7 +107,7 @@ static void k_unregister_interface(rc_cpu *c)
     const char *in = iface ? rc_str(iface) : NULL;
     uint32_t keep = 0;
     for (uint32_t i = 0; i < nentries; i++) {
-        if (entries[i].provider == prov && (!in || strcasecmp(entries[i].iface, in) == 0)) {
+        if (entries[i].provider == prov && (!in || same(entries[i].iface, in))) {
             continue;
         }
         entries[keep++] = entries[i];
@@ -103,8 +120,8 @@ static const struct rib_entry *find(uint32_t prov, const char *iface, uint32_t t
 {
     for (uint32_t i = 0; i < nentries; i++) {
         const struct rib_entry *r = &entries[i];
-        if (r->provider == prov && r->type == type && strcasecmp(r->iface, iface) == 0 &&
-            strcasecmp(r->name, name) == 0) {
+        if (r->provider == prov && r->type == type && same(r->iface, iface) &&
+            same(r->name, name)) {
             return r;
         }
     }
@@ -122,11 +139,11 @@ static bool matches(const char *list, const char *value)
             list++;
             n--;
         }
-        if (n == vl && strncasecmp(list, value, n) == 0) {
+        if (n == vl && same_n(list, value, n)) {
             return true;
         }
         /* "*.mp3" against a file name or a suffix */
-        if (n > 1 && list[0] == '*' && vl >= n - 1 && strncasecmp(value + vl - (n - 1), list + 1, n - 1) == 0) {
+        if (n > 1 && list[0] == '*' && vl >= n - 1 && same_n(value + vl - (n - 1), list + 1, n - 1)) {
             return true;
         }
         list += n;
