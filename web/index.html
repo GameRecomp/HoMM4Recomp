@@ -4,27 +4,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cultures Converter</title>
-<meta name="description" content="Turn your own copy of a Cultures game into a native build for Windows, Linux or Android, or play it right in your browser.">
-<link rel="icon" href="cultures1.svg" type="image/svg+xml">
+<title>Heroes IV Converter</title>
+<meta name="description" content="Turn your own copy of Heroes of Might and Magic IV into a native build for Windows, Linux or Android, or play it in your browser. Nothing is uploaded.">
+<link rel="icon" href="heroes4.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
   <header>
-    <img class="game-icon" src="cultures1.svg" alt="" width="56" height="56">
+    <img class="game-icon" src="heroes4.svg" alt="" width="56" height="56">
     <div>
-      <h1>Cultures Converter</h1>
-      <p class="lede">Turns your own copy of <em id="game-name">Cultures</em> into a build that runs natively on Windows, Linux or Android, or that you play right here in your browser.</p>
+      <h1>Heroes IV Converter</h1>
+      <p class="lede">Turns your own copy of <em id="game-name">Heroes of Might and Magic IV</em> into a build that runs natively on Windows, Linux or Android, or that you play right here in your browser.</p>
     </div>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Game">
-    <button type="button" role="tab" data-game="cultures1">Cultures</button>
-    <button type="button" role="tab" data-game="cultures2">Cultures 2</button>
-    <button type="button" role="tab" data-game="northland">Northland</button>
-    <button type="button" role="tab" data-game="eighthwonder">8th Wonder</button>
-    <button type="button" role="tab" data-game="saga">Saga</button>
+    <button type="button" role="tab" data-game="heroes4">Heroes IV</button>
   </nav>
 
   <p class="local">Everything happens in this browser tab. Your files are not uploaded anywhere; this site only serves the converter itself.</p>
@@ -32,11 +28,11 @@
   <section class="card" id="step-file">
     <h2><span class="step">1</span> Your game</h2>
     <div id="drop" class="drop">
-      <p id="source-gog">The GOG installer, <code id="installer">setup_cultures_2.1.0.12.exe</code> (<span id="installer-size">about 190 MiB</span>), English, German or Spanish.</p>
+      <p id="source-gog">The GOG installer, <code id="installer">setup_heroes_of_might_and_magic_4_complete_3.0_(german)_(25023).exe</code>, and the <code>.bin</code> file beside it (<span id="installer-size">about 1 GiB</span>): choose both at once.</p>
       <p id="source-zip" hidden>A zip of the game installed from its German CD (<span id="zip-size">about 280 MiB</span>): zip the folder the game was installed to, with <code>Game.exe</code> and <code>DataX</code> in it.</p>
       <button id="choose" type="button">Choose file…</button>
       <span id="file-name" class="file-name">No file chosen</span>
-      <input id="file" type="file" accept=".exe,.zip" hidden>
+      <input id="file" type="file" accept=".exe,.zip,.bin" multiple hidden>
       <p class="hint">Or drop it here.</p>
     </div>
   </section>
@@ -54,7 +50,7 @@
   </section>
 
   <section id="stored" class="card stored" hidden>
-    <h2><img class="game-icon" src="cultures1.svg" alt="" width="28" height="28"><span><span id="stored-title">Cultures</span> is in this browser</span></h2>
+    <h2><img class="game-icon" src="heroes4.svg" alt="" width="28" height="28"><span><span id="stored-title">Heroes IV</span> is in this browser</span></h2>
     <p id="stored-info"></p>
     <div class="actions">
       <a class="primary button play" href="play.html">Play</a>
@@ -92,7 +88,7 @@
   </section>
 
   <footer>
-    <p>An unofficial fan project, not affiliated with or endorsed by the rights holders. Supported: the GOG releases of Cultures, Cultures 2, Northland and 8th Wonder of the World.</p>
+    <p>An unofficial fan project, not affiliated with or endorsed by the rights holders. Supported: the German GOG release of Heroes of Might and Magic IV (Complete). <a href="https://github.com/GameRecomp/HoMM4Recomp">Source code</a></p>
     <p class="version">HoMM4Recomp @VERSION@</p>
   </footer>
 </main>

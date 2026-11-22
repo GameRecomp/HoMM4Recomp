@@ -13,8 +13,8 @@
 //   The canvas holds the game's frame at its own size; the page scales it:
 //   as large as fits, or by a whole number of device pixels.
 
-// The game is the page's ?game= (cultures1, ...); each has its own web
-// shell (player/cultures1.js, ...), loaded when the game
+// The game is the page's ?game= (heroes4); each has its own web
+// shell (player/heroes4.js), loaded when the game
 // starts: a site built without it says so instead of failing to load the
 // page.
 import { gameOf, showIcon } from './games.js';
@@ -311,7 +311,7 @@ async function main() {
   try {
     game = await findGame();
   } catch (_) {
-    $('status').textContent = 'The game is not in this browser yet. Convert your installer (or the Saga zip) for '
+    $('status').textContent = 'The game is not in this browser yet. Convert your installer for '
       + '"Browser" on the converter page first.';
     $('convert').hidden = false;
     return;

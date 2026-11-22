@@ -5,7 +5,7 @@
 //
 // For the browser ("web"), the game's files and its code (a WebAssembly
 // module for the web shell) go into the origin's private file system
-// (OPFS) under the game's id (cultures1/, cultures2/, ...), through synchronous
+// (OPFS) under the game's id (heroes4/), through synchronous
 // access handles, which also
 // only workers have; info.json, written last, marks a complete game.
 //
@@ -81,8 +81,8 @@ function checkGame(plan, game) {
   }
 }
 
-async function convertForBrowser(file, read, progress, game) {
-  const plan = JSON.parse(plan_web(file.size, read));
+async function convertForBrowser(file, read, slice, sliceRead, progress, game) {
+  const plan = JSON.parse(plan_web(file.size, read, slice ? slice.size : 0, sliceRead));
   checkGame(plan, game);
   const root = await navigator.storage.getDirectory();
   try {
@@ -152,7 +152,7 @@ async function convertForBrowser(file, read, progress, game) {
   };
   let summary;
   try {
-    summary = convert_web(file.size, read, progress, sink);
+    summary = convert_web(file.size, read, slice ? slice.size : 0, sliceRead, progress, sink);
   } finally {
     for (const h of handles.values()) h.close();
     codeHandle.close();
@@ -172,26 +172,31 @@ async function convertForBrowser(file, read, progress, game) {
 }
 
 self.onmessage = async (event) => {
-  const { file, template, mode, game } = event.data;
+  const { file, slice, template, mode, game } = event.data;
   if (GAMES[game]) NO_ROOM = `the browser has no room left for the game (${GAMES[game].size} is needed)`;
   try {
     await init();
     const reader = new FileReaderSync();
     const read = (offset, length) =>
       new Uint8Array(reader.readAsArrayBuffer(file.slice(offset, offset + length)));
+    // The installer's data file beside it (setup_….exe's -1.bin), when it has one.
+    const sliceRead = slice
+      ? (offset, length) => new Uint8Array(reader.readAsArrayBuffer(slice.slice(offset, offset + length)))
+      : null;
     const progress = (stage, done, total) => self.postMessage({ type: 'progress', stage, done, total });
     let summary;
     if (mode === 'update') {
-      const r = await updateCode(game || 'cultures1', progress);
+      const r = await updateCode(game || 'heroes4', progress);
       self.postMessage({ type: 'done', ...r });
       return;
     }
     if (mode === 'web') {
-      summary = await convertForBrowser(file, read, progress, game);
+      summary = await convertForBrowser(file, read, slice, sliceRead, progress, game);
     } else {
-      checkGame(JSON.parse(plan_web(file.size, read)), game);
+      const sliceSize = slice ? slice.size : 0;
+      checkGame(JSON.parse(plan_web(file.size, read, sliceSize, sliceRead)), game);
       const output = (chunk) => self.postMessage({ type: 'data', chunk }, [chunk.buffer]);
-      summary = convert(file.size, read, new Uint8Array(template), progress, output);
+      summary = convert(file.size, read, sliceSize, sliceRead, new Uint8Array(template), progress, output);
     }
     self.postMessage({ type: 'done', summary });
   } catch (err) {

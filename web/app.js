@@ -8,7 +8,7 @@ import { GAMES, gameOf, showIcon } from './games.js';
 
 const $ = (id) => document.getElementById(id);
 
-/* The game chosen by the tabs (and kept in the address: ?game=cultures2). */
+/* The game chosen by the tabs (and kept in the address: ?game=heroes4). */
 let game = gameOf(window.location);
 
 const STAGES = [
@@ -131,11 +131,21 @@ function clock(ms) {
 let file = null;
 let running = false;
 
-function setFile(f) {
-  file = f;
-  $('file-name').textContent = f ? `${f.name} (${mib(f.size)})` : 'No file chosen';
-  $('start').disabled = !f;
+/* The files chosen or dropped: the installer (or zip), and an installer's data file beside it
+ * (its -1.bin), which installers of large games keep their files in. */
+let slice = null;
+function setFiles(list) {
+  const all = [...(list || [])];
+  file = all.find((f) => !/\.bin$/i.test(f.name)) || null;
+  slice = all.find((f) => /\.bin$/i.test(f.name)) || null;
+  const needSlice = !!(game && game.slice);
+  const names = [file, slice].filter(Boolean).map((f) => `${f.name} (${mib(f.size)})`);
+  let note = names.length ? names.join(' + ') : 'No file chosen';
+  if (file && needSlice && !slice) note += ' — choose its .bin file too (both at once)';
+  $('file-name').textContent = note;
+  $('start').disabled = !file || (needSlice && !slice);
 }
+function setFile(f) { setFiles(f ? [f] : []); }
 
 function buildStageList() {
   const list = $('stages');
@@ -297,8 +307,8 @@ async function start() {
     await out.abort();
     finish(false, e.message || 'the converter stopped');
   };
-  if (webMode) worker.postMessage({ file, mode: 'web', game: forGame.id });
-  else worker.postMessage({ file, template, game: forGame.id }, [template]);
+  if (webMode) worker.postMessage({ file, slice, mode: 'web', game: forGame.id });
+  else worker.postMessage({ file, slice, template, game: forGame.id }, [template]);
 
   function finish(ok, text, url, name) {
     clearInterval(timer);
@@ -335,7 +345,7 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 $('choose').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', (e) => setFile(e.target.files[0] || null));
+$('file').addEventListener('change', (e) => setFiles(e.target.files));
 $('start').addEventListener('click', start);
 const drop = $('drop');
 drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
@@ -343,7 +353,7 @@ drop.addEventListener('dragleave', () => drop.classList.remove('over'));
 drop.addEventListener('drop', (e) => {
   e.preventDefault();
   drop.classList.remove('over');
-  if (!running && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  if (!running && e.dataTransfer.files[0]) setFiles(e.dataTransfer.files);
 });
 /* The systems' notes as the page has them, to put back when a system is
  * offered again. */
