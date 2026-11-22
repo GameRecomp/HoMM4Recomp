@@ -195,6 +195,30 @@ static uint32_t key_event(const rc_event *e, uint32_t *lp)
 static rc_event raw[RAW];
 static uint32_t rhead, rtail;
 
+/* The last button press, for double clicks (WM_xBUTTONDBLCLK instead of a second press within the
+ * double-click time, as near as Windows wants it, to a window whose class asks for them). */
+static uint32_t last_down_time, last_down_hwnd, last_down_msg;
+static int32_t last_down_x, last_down_y;
+
+static uint32_t double_click(uint32_t hwnd, uint32_t press, int32_t x, int32_t y, bool dblclks)
+{
+    uint32_t now = (uint32_t)rc_ticks_peek_ms();
+    int32_t dx = x - last_down_x, dy = y - last_down_y;
+    uint32_t m = press;
+    if (hwnd == last_down_hwnd && press == last_down_msg && now - last_down_time < 500 && dx * dx + dy * dy <= 16 &&
+        dblclks) {
+        m = press + 2; /* WM_xBUTTONDBLCLK */
+        last_down_time = 0;
+    } else {
+        last_down_time = now;
+    }
+    last_down_hwnd = hwnd;
+    last_down_msg = press;
+    last_down_x = x;
+    last_down_y = y;
+    return m;
+}
+
 void rc_input_deliver(const rc_event *ev)
 {
     for (int i = 0; i < nobservers; i++) {
@@ -246,6 +270,10 @@ void rc_input_deliver(const rc_event *ev)
         keys[vk[e.button & 3]] = e.down ? 0x80 : 0;
         /* WM_LBUTTONDOWN 0x201, RBUTTON 0x204, MBUTTON 0x207; up is +1. */
         uint32_t m = WM_LBUTTONDOWN + 3u * (uint32_t)(e.button - 1) + (e.down ? 0u : 1u);
+        if (e.down) {
+            rc_wclass *k = rc_class_find(rc_wnd_class_name(to));
+            m = double_click(to, m, e.x, e.y, k && (k->style & CS_DBLCLKS));
+        }
         rc_post_message(to, m, mk_flags(), point(e.x, e.y));
         break;
     }
@@ -301,8 +329,6 @@ static uint32_t mouse_target(rc_cpu *c, int32_t x, int32_t y, uint32_t *hit)
     return 0;
 }
 
-static uint32_t last_down_time, last_down_hwnd, last_down_msg;
-static int32_t last_down_x, last_down_y;
 
 /* Desktop input into messages (needs the guest for the questions asked on the way). */
 static void route_raw(rc_cpu *c)
@@ -350,20 +376,8 @@ static void route_raw(rc_cpu *c)
             bool client = hit == HTCLIENT || rc_wnd_capture() == h;
             uint32_t m = base;
             if (e.type == RC_EV_MOUSE_BUTTON && e.down) {
-                uint32_t now = (uint32_t)rc_ticks_peek_ms();
                 rc_wclass *k = rc_class_find(rc_wnd_class_name(h));
-                int32_t dx = e.x - last_down_x, dy = e.y - last_down_y;
-                if (h == last_down_hwnd && base == last_down_msg && now - last_down_time < 500 && dx * dx + dy * dy <= 16 &&
-                    (!client || (k && (k->style & CS_DBLCLKS)))) {
-                    m = base + 2; /* WM_xBUTTONDBLCLK */
-                    last_down_time = 0;
-                } else {
-                    last_down_time = now;
-                }
-                last_down_hwnd = h;
-                last_down_msg = base;
-                last_down_x = e.x;
-                last_down_y = e.y;
+                m = double_click(h, base, e.x, e.y, !client || (k && (k->style & CS_DBLCLKS)));
             }
             if (client) {
                 int32_t ox, oy;
