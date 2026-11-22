@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# New Game, the campaign of The Gathering Storm, its first campaign, its first map started. Coordinates at 1024x768.
+220 key 27
+222 keyup 27
+300 key 27
+302 keyup 27
+380 move 512 384
+382 down 1
+384 up 1
+460 key 27
+462 keyup 27
+700 move 895 142
+720 down 1
+724 up 1
+790 move 660 282
+800 down 1
+804 up 1
+1100 move 300 250
+1110 down 1
+1114 up 1
+1400 move 780 644
+1410 down 1
+1414 up 1
