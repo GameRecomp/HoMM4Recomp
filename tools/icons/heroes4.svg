@@ -1,43 +1,117 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: MIT -->
-<!-- HoMM4Recomp's icon: a crossed sword and wand over a heater shield, on a dusk sky in a silver
-     ring; drawn for this project (no game art). -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<!-- HoMM4Recomp's icon, after the layout of the game's store icon: three overlapping medallions (gold, red,
+     blue), each with four round windows on small landscapes, on a gold field in a silver ring. Drawn for this
+     project: the scenes are simple shapes of our own, no game art. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 256 256" width="256" height="256">
   <defs>
-    <radialGradient id="sky" cx="0.45" cy="0.3" r="0.75">
-      <stop offset="0" stop-color="#9fc4ff"/>
-      <stop offset="0.55" stop-color="#3a4fa8"/>
-      <stop offset="1" stop-color="#1a1440"/>
-    </radialGradient>
     <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f4f4f4"/>
-      <stop offset="0.5" stop-color="#b9bcc2"/>
-      <stop offset="1" stop-color="#7d8189"/>
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#c9ccd2"/>
+      <stop offset="1" stop-color="#8a8e96"/>
     </linearGradient>
-    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#c8302c"/>
-      <stop offset="1" stop-color="#6e1414"/>
+    <radialGradient id="field" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#f3cf3a"/>
+      <stop offset="0.6" stop-color="#c99a0c"/>
+      <stop offset="1" stop-color="#4a3300"/>
+    </radialGradient>
+    <radialGradient id="gold" cx="0.4" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fff2a8"/>
+      <stop offset="0.5" stop-color="#e2b21e"/>
+      <stop offset="1" stop-color="#8f6404"/>
+    </radialGradient>
+    <radialGradient id="red" cx="0.4" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#f0644a"/>
+      <stop offset="0.55" stop-color="#b3180f"/>
+      <stop offset="1" stop-color="#5a0805"/>
+    </radialGradient>
+    <radialGradient id="blue" cx="0.4" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#a6e4f4"/>
+      <stop offset="0.55" stop-color="#3b93b8"/>
+      <stop offset="1" stop-color="#16465e"/>
+    </radialGradient>
+    <linearGradient id="day" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fc3ea"/>
+      <stop offset="1" stop-color="#f4e7c0"/>
     </linearGradient>
-    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#f2f4f7"/>
-      <stop offset="1" stop-color="#9aa0aa"/>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b4a8a"/>
+      <stop offset="1" stop-color="#f0a85a"/>
     </linearGradient>
-    <clipPath id="disc"><circle cx="128" cy="128" r="108"/></clipPath>
+    <radialGradient id="shade" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.7" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.45"/>
+    </radialGradient>
+    <clipPath id="win"><circle cx="0" cy="0" r="10"/></clipPath>
+
+    <!-- Four scenes, each in a window of radius 10 around (0,0). -->
+    <g id="castle" clip-path="url(#win)">
+      <rect x="-10" y="-10" width="20" height="20" fill="url(#day)"/>
+      <path d="M-10 4 Q0 0 10 5 V10 H-10Z" fill="#6f9a3e"/>
+      <path d="M-5 3 V-3 H-4 V-5 H-3 V-3 H-1 V-6 H0 V-8 H1 V-6 H2 V-3 H3 V-5 H4 V-3 H5 V3Z" fill="#d8cfb8"/>
+      <rect x="-1" y="0" width="2" height="3" fill="#5a4630"/>
+    </g>
+    <g id="forest" clip-path="url(#win)">
+      <rect x="-10" y="-10" width="20" height="20" fill="url(#day)"/>
+      <path d="M-10 3 Q-2 -1 10 2 V10 H-10Z" fill="#4f7d2c"/>
+      <path d="M-7 4 L-4.5 -4 L-2 4Z M-3 5 L0 -6 L3 5Z M2 4 L5 -3 L8 4Z" fill="#24502a"/>
+    </g>
+    <g id="peaks" clip-path="url(#win)">
+      <rect x="-10" y="-10" width="20" height="20" fill="url(#dusk)"/>
+      <path d="M-10 6 L-4 -4 L0 1 L4 -6 L10 4 V10 H-10Z" fill="#5d5470"/>
+      <path d="M-5.2 -2 L-4 -4 L-2.8 -2Z M2.8 -4 L4 -6 L5.2 -4Z" fill="#f4f0f8"/>
+      <circle cx="-6" cy="-6" r="1.6" fill="#ffe9a8"/>
+    </g>
+    <g id="coast" clip-path="url(#win)">
+      <rect x="-10" y="-10" width="20" height="20" fill="url(#day)"/>
+      <rect x="-10" y="1" width="20" height="9" fill="#2f6f9e"/>
+      <path d="M-10 6 Q-4 2 1 10 H-10Z" fill="#c9b27a"/>
+      <path d="M3 0 V-6 L6.5 -1Z" fill="#f6f2e6"/><path d="M1.5 0 H7 L6 1.5 H2.5Z" fill="#6a4a2a"/>
+    </g>
+
+    <!-- A medallion's four windows in a quatrefoil, with a boss in the middle. -->
+    <g id="windows">
+      <use xlink:href="#castle" transform="translate(-17 -17) scale(1.7)"/>
+      <use xlink:href="#forest" transform="translate(17 -17) scale(1.7)"/>
+      <use xlink:href="#peaks" transform="translate(-17 17) scale(1.7)"/>
+      <use xlink:href="#coast" transform="translate(17 17) scale(1.7)"/>
+      <g fill="url(#shade)">
+        <circle cx="-17" cy="-17" r="17"/><circle cx="17" cy="-17" r="17"/>
+        <circle cx="-17" cy="17" r="17"/><circle cx="17" cy="17" r="17"/>
+      </g>
+      <g fill="none" stroke="#3a2a06" stroke-opacity="0.6" stroke-width="1.6">
+        <circle cx="-17" cy="-17" r="17"/><circle cx="17" cy="-17" r="17"/>
+        <circle cx="-17" cy="17" r="17"/><circle cx="17" cy="17" r="17"/>
+      </g>
+      <circle r="7" fill="#e8c34a" stroke="#3a2a06" stroke-opacity="0.6" stroke-width="1.4"/>
+      <circle r="3" fill="#fff4c0" fill-opacity="0.7"/>
+    </g>
   </defs>
+
   <circle cx="128" cy="128" r="124" fill="url(#ring)"/>
-  <circle cx="128" cy="128" r="110" fill="#5a5d63"/>
-  <g clip-path="url(#disc)">
-    <circle cx="128" cy="128" r="108" fill="url(#sky)"/>
-    <circle cx="70" cy="70" r="2" fill="#fff"/><circle cx="186" cy="60" r="2.5" fill="#fff"/>
-    <circle cx="200" cy="104" r="1.5" fill="#fff"/><circle cx="58" cy="118" r="1.5" fill="#fff"/>
-    <path d="M58 214 L190 62" stroke="#3b2412" stroke-width="10" stroke-linecap="round"/>
-    <circle cx="194" cy="58" r="13" fill="#7ef0ff" stroke="#e8fdff" stroke-width="3"/>
-    <path d="M70 54 L84 50 L196 174 L182 188 Z" fill="url(#blade)" stroke="#3d4148" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M178 196 L204 170" stroke="#d8a830" stroke-width="10" stroke-linecap="round"/>
-    <path d="M196 188 L214 206" stroke="#5a3418" stroke-width="10" stroke-linecap="round"/>
-    <circle cx="218" cy="210" r="7" fill="#d8a830"/>
-    <path d="M128 76 C150 86 168 88 184 86 C184 150 164 186 128 206 C92 186 72 150 72 86 C88 88 106 86 128 76 Z"
-          fill="url(#shield)" stroke="#d8a830" stroke-width="6" stroke-linejoin="round"/>
-    <path d="M128 98 L128 186 M96 128 L160 128" stroke="#d8a830" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="128" cy="128" r="111" fill="#6b6f76"/>
+  <circle cx="128" cy="128" r="109" fill="url(#field)"/>
+
+  <!-- red, bottom left -->
+  <g transform="translate(86 152)">
+    <circle r="54" fill="#000" fill-opacity="0.3" transform="translate(2 4)"/>
+    <circle r="52" fill="url(#red)" stroke="#3b0503" stroke-width="2"/>
+    <circle r="47" fill="none" stroke="#f59a7a" stroke-opacity="0.5" stroke-width="1.2"/>
+    <use xlink:href="#windows"/>
+  </g>
+  <!-- blue, bottom right -->
+  <g transform="translate(170 152)">
+    <circle r="54" fill="#000" fill-opacity="0.3" transform="translate(2 4)"/>
+    <circle r="52" fill="url(#blue)" stroke="#0e2f40" stroke-width="2"/>
+    <circle r="47" fill="none" stroke="#d2f2fb" stroke-opacity="0.5" stroke-width="1.2"/>
+    <use xlink:href="#windows"/>
+  </g>
+  <!-- gold, on top -->
+  <g transform="translate(128 84)">
+    <circle r="56" fill="#000" fill-opacity="0.35" transform="translate(2 5)"/>
+    <circle r="54" fill="url(#gold)" stroke="#5e4002" stroke-width="2"/>
+    <circle r="49" fill="none" stroke="#fff6c8" stroke-opacity="0.6" stroke-width="1.2"/>
+    <use xlink:href="#windows" transform="scale(1.04)"/>
   </g>
 </svg>
