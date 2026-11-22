@@ -1946,6 +1946,18 @@ static void k_SetWindowLongA(rc_cpu *c)
         if (index == -16 || index == -20) {
             w->nc_dirty = true;
         }
+        /* WS_VISIBLE set or cleared in the style shows or hides the window as on Windows (no
+         * WM_SHOWWINDOW). Heroes IV sets WS_POPUP | WS_VISIBLE before its ShowWindow, which then
+         * finds the window shown and changes nothing: the host window has to follow here. */
+        if (index == -16 && ((old ^ v) & WS_VISIBLE)) {
+            vis_gen++;
+            if (!(v & WS_CHILD)) {
+                invalidate_all();
+                if (handle_of(w) == main_hwnd && !desktop_on) {
+                    rc_plat_show((v & WS_VISIBLE) != 0);
+                }
+            }
+        }
     } else if (index >= 0 && index + 4 <= EXTRA) {
         memcpy(&old, w->extra + index, 4);
         memcpy(w->extra + index, &v, 4);

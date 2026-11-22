@@ -26,6 +26,8 @@
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
+/* Whether the window is to be seen; asked before it exists, it is shown when it is made. */
+static bool window_shown;
 static SDL_Texture *texture;
 static int frame_w = 640, frame_h = 480;
 static rc_display display = {0, false, false, 0, 0, 0, 10, true};
@@ -256,6 +258,9 @@ bool rc_plat_window(int width, int height)
             SDL_SetWindowFullscreen(window, true);
         }
 #endif
+        if (window_shown) {
+            SDL_ShowWindow(window);
+        }
         return make_texture();
     }
     if (!resized) {
@@ -276,6 +281,7 @@ bool rc_plat_window(int width, int height)
 
 void rc_plat_show(bool show)
 {
+    window_shown = show;
     if (window) {
         if (show) {
             SDL_ShowWindow(window);
