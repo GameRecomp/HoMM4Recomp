@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MIT
+# Network game, hosting side (tools/run-netgame): Multiplayer, TCP/IP, host; the scenario list:
+# another map, then the six-player 'Just Another Mine War' (the list's first selection does not
+# reach the set-up until one has been clicked); the host takes slot 1, waits for the joining
+# player, ticks Ready, starts the game. Coordinates at 1024x768.
+220 key 27
+222 keyup 27
+300 key 27
+302 keyup 27
+380 move 512 384
+382 down 1
+384 up 1
+460 key 27
+462 keyup 27
+700 move 895 500
+720 down 1
+724 up 1
+790 move 660 596
+800 down 1
+804 up 1
+1100 move 680 636
+1110 down 1
+1114 up 1
+1400 move 714 510
+1410 down 1
+1414 up 1
+1750 move 300 316
+1760 down 1
+1764 up 1
+1800 move 300 214
+1810 down 1
+1814 up 1
+1900 move 776 642
+1910 down 1
+1914 up 1
+2000 move 476 180
+2010 down 1
+2014 up 1
+2100 shot @SYNC@/hostready.bmp
+2300 wait @SYNC@/joined.bmp
+2320 move 145 180
+2330 down 1
+2334 up 1
+2400 shot @SYNC@/seated.bmp
+2500 move 808 642
+2510 down 1
+2514 up 1

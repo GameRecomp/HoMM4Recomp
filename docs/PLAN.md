@@ -262,8 +262,10 @@ Binary treatment (first proposal, see M2 and M6):
       the host lists it (two scripted runs lined up with `shot`/`wait`)
 - [x] The host shows its network address; the joining program receives the host's whole game set-up (the
       shared network held only 256 bytes of DirectPlay application data, Heroes IV uses 304)
-- [ ] The joining player takes a slot (clicking one does not change it yet: **open**), the game starts; a full
-      game played; on a LAN
+- [x] Both players take a slot (the box at the right of a slot the map leaves to humans), tick Ready, the host
+      starts: both programs are on the adventure map, the joining one with the game it received
+      (`tools/run-netgame heroes4 netgame`)
+- [ ] A full network game played (turns passing between the two); on a LAN between two machines
 - [ ] GameSpy: the menu entries fail cleanly; no connection attempts to dead servers (patch if needed)
 - [ ] Browser: no raw sockets — WebSocket relay or "not available" (decision when there)
 

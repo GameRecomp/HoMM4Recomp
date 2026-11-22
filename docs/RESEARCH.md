@@ -128,3 +128,16 @@ Compared by name with CulturesRecomp's HLE layer (2026-11-21), the imports it do
 ## Open questions
 
 See the list in [PLAN.md](PLAN.md#research-questions).
+
+## Network game set-up
+
+- The game's packets over DirectPlay 8: one byte (1), u32 compressed size, u32 size, zlib data; the first
+  byte of the data is the packet type (0x0d: the game set-up with the map's name, conditions and the six
+  slots; 0x0e and 0x0f: small state packets). The host sends with GUARANTEED | NOLOOPBACK; it does not
+  answer INDICATE_CONNECT with reply data.
+- A slot is taken with the small box at the right of its name field, which only slots the map leaves to
+  humans have ("Banditen des Rifen-Labyrinths" has one; "Ein unbedeutender Minen-Krieg" two).
+- The scenario list's first selection (the highlighted map, its description shown) does not reach the set-up:
+  "Weiter" starts another map ("Banditen des Rifen-Labyrinths" instead of "Ein unbedeutender Minen-Krieg")
+  until a row has been clicked. The list is the game's own code, without a Win32 control or file access;
+  probably the original does the same **(open: to compare on Windows)**.

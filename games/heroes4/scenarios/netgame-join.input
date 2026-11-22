@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MIT
+# Network game, joining side (tools/run-netgame): Multiplayer, TCP/IP direct, waits for the
+# host, enters 127.0.0.1 and a player name, joins, takes slot 4, ticks Ready; then receives the
+# game. Coordinates at 1024x768.
+220 key 27
+222 keyup 27
+300 key 27
+302 keyup 27
+380 move 512 384
+382 down 1
+384 up 1
+460 key 27
+462 keyup 27
+700 move 895 500
+720 down 1
+724 up 1
+790 move 660 620
+800 down 1
+804 up 1
+1100 move 680 636
+1110 down 1
+1114 up 1
+1400 move 548 226
+1410 down 1
+1414 up 1
+1500 wait @SYNC@/hostready.bmp
+1510 move 512 380
+1520 down 1
+1524 up 1
+1540 key 49
+1542 keyup 49
+1546 key 50
+1548 keyup 50
+1552 key 55
+1554 keyup 55
+1558 key 190
+1560 keyup 190
+1564 key 48
+1566 keyup 48
+1570 key 190
+1572 keyup 190
+1576 key 48
+1578 keyup 48
+1582 key 190
+1584 keyup 190
+1588 key 49
+1590 keyup 49
+1614 move 600 440
+1624 down 1
+1628 up 1
+1700 move 370 180
+1705 down 1
+1708 up 1
+1720 key 71
+1722 keyup 71
+1726 key 65
+1728 keyup 65
+1732 key 83
+1734 keyup 83
+1738 key 84
+1740 keyup 84
+1800 move 300 320
+1810 down 1
+1814 up 1
+1850 move 775 642
+1860 down 1
+1864 up 1
+2400 move 476 378
+2410 down 1
+2414 up 1
+2500 move 145 375
+2510 down 1
+2514 up 1
+2600 shot @SYNC@/joined.bmp
