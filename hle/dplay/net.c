@@ -65,6 +65,7 @@ static struct {
     conn conns[CONNS]; /* host: its clients; client: conns[0] is the host */
     int nconns;
     uint32_t pending_id; /* client: a player waiting for its id */
+    bool awaiting_id;    /* client: net_create_player waits for pending_id */
     bool welcomed;
 } n;
 
@@ -423,6 +424,31 @@ static void handle_frame(int ci, uint8_t type, const uint8_t *p, uint32_t len)
     }
 }
 
+/* While a new local player waits for its id, frames after the one that brings it wait too:
+ * data for that player, sent by the host right after, must find it made. */
+static bool held(void) { return n.awaiting_id && n.pending_id; }
+
+/* Handle the whole frames in a connection's input. */
+static void drop_conn(int ci);
+static void take_frames(int ci)
+{
+    conn *k = &n.conns[ci];
+    uint32_t at = 0;
+    while (k->s != INVALID_SOCKET && !held() && k->in_len - at >= 5) {
+        uint32_t len;
+        memcpy(&len, k->in + at, 4);
+        if (len == 0 || k->in_len - at - 4 < len) {
+            break;
+        }
+        handle_frame(ci, k->in[at + 4], k->in + at + 5, len - 1);
+        at += 4 + len;
+    }
+    if (k->s != INVALID_SOCKET && at) {
+        memmove(k->in, k->in + at, k->in_len - at);
+        k->in_len -= at;
+    }
+}
+
 static void drop_conn(int ci)
 {
     conn *k = &n.conns[ci];
@@ -548,7 +574,8 @@ void net_poll(void)
     }
     for (int ci = 0; ci < n.nconns; ci++) {
         conn *k = &n.conns[ci];
-        while (k->s != INVALID_SOCKET) {
+        take_frames(ci); /* left from the last poll */
+        while (k->s != INVALID_SOCKET && !held()) {
             int got = (int)recv(k->s, (char *)buf, sizeof buf, 0);
             if (got == 0 || (got < 0 && !WOULDBLOCK())) {
                 drop_conn(ci);
@@ -568,24 +595,7 @@ void net_poll(void)
             }
             memcpy(k->in + k->in_len, buf, (size_t)got);
             k->in_len += (uint32_t)got;
-            uint32_t at = 0;
-            while (k->in_len - at >= 5) {
-                uint32_t len;
-                memcpy(&len, k->in + at, 4);
-                if (len == 0 || k->in_len - at - 4 < len) {
-                    break;
-                }
-                handle_frame(ci, k->in[at + 4], k->in + at + 5, len - 1);
-                if (k->s == INVALID_SOCKET) {
-                    break;
-                }
-                at += 4 + len;
-            }
-            if (k->s == INVALID_SOCKET) {
-                break;
-            }
-            memmove(k->in, k->in + at, k->in_len - at);
-            k->in_len -= at;
+            take_frames(ci);
         }
     }
 }
@@ -832,6 +842,7 @@ uint32_t net_create_player(const char *short_name, const char *long_name, const 
         uint32_t len;
         uint8_t *rec = pack_player(&r, &len);
         n.pending_id = 0;
+        n.awaiting_id = true;
         if (rec) {
             send_frame(&n.conns[0], F_CREATE_REQ, rec, len);
             free(rec);
@@ -840,6 +851,7 @@ uint32_t net_create_player(const char *short_name, const char *long_name, const 
             net_poll();
             net_sleep(5);
         }
+        n.awaiting_id = false;
         if (!n.pending_id) {
             return 0;
         }
