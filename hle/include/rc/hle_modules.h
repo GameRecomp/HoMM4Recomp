@@ -39,6 +39,9 @@ void rc_add_pump_hook(void (*fn)(struct rc_cpu *c));
  * held back is given to the program later with rc_input_deliver. */
 struct rc_event;
 void rc_set_input_filter(bool (*fn)(const struct rc_event *e));
+/* A window class without a pointer shows none of the system's in its client area: for a game that
+ * draws its own pointer (off by default, as Windows: the last pointer stays). */
+void rc_wnd_own_pointer(bool on);
 void rc_input_deliver(const struct rc_event *e);
 /* A game project's patch may move where the pointer is for the program
  * (`fn` changes the point, in the program's coordinates), for example to

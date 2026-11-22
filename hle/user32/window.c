@@ -116,6 +116,19 @@ typedef struct window {
     uint8_t extra[EXTRA];
 } window;
 
+/* A window class without a pointer shows none in its client area (rc_wnd_own_pointer): for a game
+ * that draws its pointer itself and never hides the system's (Windows keeps the last one, an
+ * arrow, over such a window; a game in full screen did not show it). */
+static bool own_pointer;
+
+void rc_wnd_own_pointer(bool on)
+{
+    own_pointer = on;
+    if (on) {
+        rc_set_cursor(0); /* (input to a game's main window goes without WM_SETCURSOR) */
+    }
+}
+
 static window windows[WINDOWS];
 static uint32_t main_hwnd, focus_hwnd, capture_hwnd, active_hwnd;
 static int64_t z_top = 1, z_bottom = 0;
@@ -2582,6 +2595,10 @@ static uint32_t def_window_proc(rc_cpu *c, uint32_t hwnd, uint32_t msg, uint32_t
         }
         if (hit == HTCLIENT && w && w->cls->cursor) {
             rc_set_cursor(w->cls->cursor);
+            return 1;
+        }
+        if (hit == HTCLIENT && w && own_pointer) {
+            rc_set_cursor(0); /* a game that draws its pointer itself: none of the system's over it */
             return 1;
         }
         rc_set_cursor(rc_arrow_cursor());
