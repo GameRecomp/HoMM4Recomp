@@ -2,6 +2,8 @@
 
 # HoMM4Recomp
 
+## 👉 [**Open the converter: gamerecomp.github.io/HoMM4Recomp**](https://gamerecomp.github.io/HoMM4Recomp/) 👈
+
 **Turn your own copy of *Heroes of Might and Magic IV* (with *The Gathering Storm* and *Winds of War*) into a native
 build for Windows, Linux or Android, or play it right in your browser.** Everything happens on your machine: your
 installer is not uploaded anywhere.
@@ -23,7 +25,8 @@ once their installers are known (by their checksums).
 
 ## How to play
 
-1. Open the converter page (`web/`, built with `tools/build-web`) in a desktop browser.
+1. Open the **[converter](https://gamerecomp.github.io/HoMM4Recomp/)** in a desktop browser (or build the page
+   yourself with `tools/build-web`).
 2. Choose **both** installer files at once. They stay on your computer.
 3. Choose your system: Windows (zip), Linux (AppImage), Android (APK), or **Browser** to play right there.
 
