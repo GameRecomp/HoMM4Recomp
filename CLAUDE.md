@@ -5,12 +5,15 @@ into portable C on an SDL3 runtime. Third project on the toolchain of `../Tropic
 CulturesRecomp is the template for all shared code. Start here, then read `docs/PLAN.md` (milestones,
 checklists, decision log), `docs/RESEARCH.md` and `docs/TARGETS.md`.
 
-## State (2026-11-21)
+## State (2026-11-22)
 
-M0–M4 done, M5–M7 in progress: the game boots, plays its intro, runs its menus, starts a scenario, a town
-opens, a battle (automatic combat) is won, the computer players take their turn, and a game is saved and
-loaded. Scripted runs: `tools/run-scenario heroes4 menu|firstturn|battle` (repeat exactly). Next: manual
-combat, a soak run, sound checked by ear, then M8–M13 (see `docs/PLAN.md`).
+M0–M4 done, M5–M13 in progress: the game boots, plays its intro, runs its menus, starts scenarios and the first
+map of all three campaigns, a town opens, battles are won (automatic and manual combat), the computer players take
+their turn, a game is saved and loaded, the resolution switches to 1280×1024. A network game of two programs starts
+and passes the turn (`tools/run-netgame heroes4 netgame`). The browser converter turns the installer into a
+WebAssembly build that plays in the page. Scripted runs: `tools/run-scenario heroes4 <name>` (repeat exactly; see
+`games/heroes4/scenarios`). Next: a full network game, the editor's tools, sound by ear, CI for Windows/Android,
+widescreen (see `docs/PLAN.md`).
 
 ```sh
 CMAKE_PREFIX_PATH=<your SDL3 prefix> cmake --preset dev && cmake --build --preset dev    # unpacks, lifts, builds
